@@ -1,0 +1,89 @@
+import java.util.*;
+import org.ros.node.*;
+import org.ros.message.*;
+import org.ros.namespace.*;
+import org.ros.concurrent.*;
+
+/**
+ * Distributed SLAM implementation for multi-robot teams.
+ * Combines local SLAM results from multiple robots into a global map.
+ */
+public class DistributedSLAM {
+    private List robotNodes; // List of participating robots
+    private Map localGraphs; // Local SLAM graphs from each robot
+    private PoseGraph globalGraph; // Merged global pose graph
+    private GraphOptimizer optimizer; // Graph optimization backend
+
+    public DistributedSLAM() {
+        robotNodes = new ArrayList<>();
+        localGraphs = new HashMap<>();
+        globalGraph = new PoseGraph();
+        optimizer = new G2OOptimizer(); // Using g2o for optimization
+    }
+
+    /**
+     * Adds a robot to the SLAM team and initializes its local graph.
+     * @param robotId Unique identifier for the robot
+     */
+    public void addRobot(String robotId) {
+        robotNodes.add(new RobotNode(robotId));
+        localGraphs.put(robotId, new PoseGraph());
+    }
+
+    /**
+     * Receives and processes local SLAM updates from robots.
+     * @param robotId Source robot identifier
+     * @param update Local graph update
+     */
+    public synchronized void processLocalUpdate(String robotId, PoseGraph update) {
+        localGraphs.put(robotId, update); // Update local graph
+        mergeGraphs(); // Trigger global merge
+    }
+
+    /**
+     * Merges all local graphs into the global map using consensus-based approach.
+     */
+    private void mergeGraphs() {
+        // Find overlapping regions between robot maps
+        Map> interRobotClosures = 
+            new LoopClosureDetector().findInterRobotClosures(localGraphs.values());
+
+        // Apply consensus-based merging
+        globalGraph = new GraphMerger().mergeGraphs(
+            localGraphs.values(), 
+            interRobotClosures
+        );
+
+        // Optimize the global graph
+        optimizer.optimize(globalGraph);
+
+        // Distribute the optimized global graph back to robots
+        distributeGlobalMap();
+    }
+
+    /**
+     * Sends the optimized global map to all team members.
+     */
+    private void distributeGlobalMap() {
+        for (RobotNode robot : robotNodes) {
+            robot.updateGlobalMap(globalGraph.getSubgraphForRobot(robot.getId()));
+        }
+    }
+
+    // Inner class representing a robot team member
+    private class RobotNode {
+        private String id;
+        private PoseGraph currentEstimate;
+
+        public RobotNode(String id) {
+            this.id = id;
+            this.currentEstimate = new PoseGraph();
+        }
+
+        public String getId() { return id; }
+
+        public void updateGlobalMap(PoseGraph update) {
+            this.currentEstimate = update;
+        }
+    }
+}
