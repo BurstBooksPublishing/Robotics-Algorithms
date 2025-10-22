@@ -1,0 +1,85 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.spatial import KDTree, distance
+
+class PRM:
+    def __init__(self, num_samples=100, k_neighbors=10, space_limits=(0, 10)):
+        """Initialize PRM with parameters."""
+        self.num_samples = num_samples
+        self.k_neighbors = k_neighbors
+        self.space_limits = space_limits
+        self.samples = []
+        self.graph = {}  # Adjacency list representation
+        self.kd_tree = None
+
+    def sample_free_space(self, obstacles):
+        """Generate collision-free samples in the configuration space."""
+        while len(self.samples) < self.num_samples:
+            sample = np.random.uniform(*self.space_limits, 2)  # 2D sample
+            if not self._check_collision(sample, obstacles):
+                self.samples.append(sample)
+        self.kd_tree = KDTree(self.samples)  # Build KD-tree for efficient NN queries
+
+    def _check_collision(self, point, obstacles):
+        """Check if a point collides with any obstacle (simplified)."""
+        for obs in obstacles:
+            if distance.euclidean(point, obs[:2]) < obs[2]:  # Circular obstacles
+                return True
+        return False
+
+    def build_roadmap(self, obstacles):
+        """Construct the probabilistic roadmap graph."""
+        for i, sample in enumerate(self.samples):
+            self.graph[i] = []
+            _, neighbors = self.kd_tree.query(sample, k=self.k_neighbors + 1)  # +1 to exclude self
+            for neighbor_idx in neighbors[1:]:  # Skip the first (self)
+                if not self._check_path_collision(sample, self.samples[neighbor_idx], obstacles):
+                    self.graph[i].append(neighbor_idx)
+
+    def _check_path_collision(self, p1, p2, obstacles, resolution=0.1):
+        """Check for collisions along a straight-line path between two points."""
+        path = np.linspace(p1, p2, int(distance.euclidean(p1, p2) / resolution))
+        for point in path:
+            if self._check_collision(point, obstacles):
+                return True
+        return False
+
+    def query(self, start, goal, obstacles):
+        """Find a path from start to goal using the roadmap (simplified Dijkstra's)."""
+        self.samples.extend([start, goal])
+        self.kd_tree = KDTree(self.samples)
+        start_idx, goal_idx = len(self.samples) - 2, len(self.samples) - 1
+        self.build_roadmap(obstacles)  # Rebuild roadmap with start/goal
+
+        # Simplified pathfinding (for demonstration)
+        visited = set()
+        queue = [(start_idx, [start_idx])]
+        while queue:
+            current, path = queue.pop(0)
+            if current == goal_idx:
+                return [self.samples[i] for i in path]
+            for neighbor in self.graph.get(current, []):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, path + [neighbor]))
+        return None
+
+# Example usage
+if __name__ == "__main__":
+    prm = PRM(num_samples=200, k_neighbors=15)
+    obstacles = [(3, 3, 1.5), (7, 7, 2)]  # (x, y, radius)
+    prm.sample_free_space(obstacles)
+    prm.build_roadmap(obstacles)
+    
+    start, goal = np.array([1, 1]), np.array([9, 9])
+    path = prm.query(start, goal, obstacles)
+    
+    # Visualization (optional)
+    plt.scatter(*zip(*prm.samples), c='blue', s=5)
+    plt.scatter(*zip(*[start, goal]), c='red', s=50)
+    for obs in obstacles:
+        circle = plt.Circle(obs[:2], obs[2], color='gray')
+        plt.gca().add_patch(circle)
+    if path:
+        plt.plot(*zip(*path), c='green')
+    plt.show()
