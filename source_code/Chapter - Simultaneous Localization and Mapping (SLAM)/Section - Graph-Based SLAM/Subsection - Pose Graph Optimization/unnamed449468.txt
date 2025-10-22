@@ -1,0 +1,171 @@
+import org.apache.commons.math3.linear.ArrayRealVector;
+import org.apache.commons.math3.linear.RealVector;
+import org.apache.commons.math3.optim.nonlinear.vector.leastsquares.LeastSquaresOptimizer;
+import org.apache.commons.math3.optim.nonlinear.vector.leastsquares.LevenbergMarquardtOptimizer;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Pose Graph Optimization implementation for Graph-Based SLAM.
+ * Solves the non-linear least squares problem using Levenberg-Marquardt.
+ */
+public class PoseGraphOptimizer {
+
+    // Represents a pose (x, y, theta) in 2D space
+    static class Pose {
+        double x, y, theta;
+        Pose(double x, double y, double theta) {
+            this.x = x;
+            this.y = y;
+            this.theta = theta;
+        }
+    }
+
+    // Represents a constraint between two poses (edge in the graph)
+    static class Constraint {
+        int fromId, toId;
+        Pose relativePose;
+        double[] informationMatrix; // 3x3 matrix flattened
+
+        Constraint(int fromId, int toId, Pose relativePose, double[] informationMatrix) {
+            this.fromId = fromId;
+            this.toId = toId;
+            this.relativePose = relativePose;
+            this.informationMatrix = informationMatrix;
+        }
+    }
+
+    private List poses;
+    private List constraints;
+
+    public PoseGraphOptimizer() {
+        poses = new ArrayList<>();
+        constraints = new ArrayList<>();
+    }
+
+    public void addPose(Pose pose) {
+        poses.add(pose);
+    }
+
+    public void addConstraint(Constraint constraint) {
+        constraints.add(constraint);
+    }
+
+    /**
+     * Optimizes the pose graph using Levenberg-Marquardt algorithm
+     * @param maxIterations Maximum optimization iterations
+     * @return Optimized poses
+     */
+    public List optimize(int maxIterations) {
+        // Convert poses to parameter vector (flattened [x1,y1,θ1, x2,y2,θ2, ...])
+        double[] initialParams = new double[poses.size() * 3];
+        for (int i = 0; i < poses.size(); i++) {
+            initialParams[i*3] = poses.get(i).x;
+            initialParams[i*3+1] = poses.get(i).y;
+            initialParams[i*3+2] = poses.get(i).theta;
+        }
+
+        // Create optimizer with LM parameters
+        LevenbergMarquardtOptimizer optimizer = new LevenbergMarquardtOptimizer()
+                .withMaxIterations(maxIterations);
+
+        // Define the optimization problem
+        LeastSquaresOptimizer.Optimum result = optimizer.optimize(
+                new PoseGraphProblem(constraints, poses.size()));
+
+        // Extract optimized parameters
+        double[] optimizedParams = result.getPoint().toArray();
+
+        // Convert back to Pose objects
+        List optimizedPoses = new ArrayList<>();
+        for (int i = 0; i < poses.size(); i++) {
+            optimizedPoses.add(new Pose(
+                    optimizedParams[i*3],
+                    optimizedParams[i*3+1],
+                    optimizedParams[i*3+2]));
+        }
+
+        return optimizedPoses;
+    }
+
+    /**
+     * Implements the least squares problem for pose graph optimization
+     */
+    private static class PoseGraphProblem implements LeastSquaresOptimizer.OptimizationProblem {
+        private final List constraints;
+        private final int numPoses;
+
+        public PoseGraphProblem(List constraints, int numPoses) {
+            this.constraints = constraints;
+            this.numPoses = numPoses;
+        }
+
+        @Override
+        public RealVector getStart() {
+            return new ArrayRealVector(new double[numPoses * 3]);
+        }
+
+        @Override
+        public int getObservationSize() {
+            return constraints.size() * 3; // Each constraint contributes 3 residuals
+        }
+
+        @Override
+        public int getParameterSize() {
+            return numPoses * 3; // Each pose has 3 parameters (x,y,θ)
+        }
+
+        @Override
+        public RealVector computeValue(double[] params) {
+            RealVector residuals = new ArrayRealVector(getObservationSize());
+            int residualIndex = 0;
+
+            for (Constraint c : constraints) {
+                Pose poseI = new Pose(params[c.fromId*3], params[c.fromId*3+1], params[c.fromId*3+2]);
+                Pose poseJ = new Pose(params[c.toId*3], params[c.toId*3+1], params[c.toId*3+2]);
+
+                // Compute error between expected and observed relative pose
+                double[] error = computeError(poseI, poseJ, c.relativePose);
+
+                // Weight residuals by information matrix
+                for (int i = 0; i < 3; i++) {
+                    double weightedResidual = 0;
+                    for (int j = 0; j < 3; j++) {
+                        weightedResidual += c.informationMatrix[i*3+j] * error[j];
+                    }
+                    residuals.setEntry(residualIndex++, weightedResidual);
+                }
+            }
+            return residuals;
+        }
+
+        // Helper method to compute error between two poses
+        private double[] computeError(Pose poseI, Pose poseJ, Pose relativePose) {
+            double[] error = new double[3];
+            double deltaX = poseJ.x - poseI.x;
+            double deltaY = poseJ.y - poseI.y;
+            
+            // Compute expected relative pose
+            double cosTheta = Math.cos(poseI.theta);
+            double sinTheta = Math.sin(poseI.theta);
+            double expectedX = cosTheta * deltaX + sinTheta * deltaY;
+            double expectedY = -sinTheta * deltaX + cosTheta * deltaY;
+            double expectedTheta = poseJ.theta - poseI.theta;
+
+            // Compute error
+            error[0] = relativePose.x - expectedX;
+            error[1] = relativePose.y - expectedY;
+            error[2] = normalizeAngle(relativePose.theta - expectedTheta);
+
+            return error;
+        }
+
+        // Normalize angle to [-π, π]
+        private double normalizeAngle(double angle) {
+            while (angle > Math.PI) angle -= 2 * Math.PI;
+            while (angle < -Math.PI) angle += 2 * Math.PI;
+            return angle;
+        }
+    }
+}
