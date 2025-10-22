@@ -1,0 +1,83 @@
+import numpy as np
+import cv2
+from sklearn.ensemble import RandomForestClassifier
+from skimage.feature import hog
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+
+class MedicalImageDiagnosis:
+    """
+    A computer-assisted diagnosis system for medical imaging using robotics algorithms.
+    Integrates feature extraction and machine learning for automated analysis.
+    """
+    
+    def __init__(self, n_estimators=100):
+        self.classifier = RandomForestClassifier(n_estimators=n_estimators)
+    
+    def extract_features(self, image):
+        """
+        Extract HOG (Histogram of Oriented Gradients) features from a medical image.
+        Args:
+            image: Input grayscale medical image (e.g., X-ray, MRI)
+        Returns:
+            features: Extracted HOG feature vector
+        """
+        # Preprocess image: resize and normalize
+        resized_img = cv2.resize(image, (128, 128))
+        normalized_img = resized_img / 255.0
+        
+        # Extract HOG features (robust to illumination changes)
+        features, _ = hog(normalized_img, orientations=9, pixels_per_cell=(8, 8),
+                         cells_per_block=(2, 2), visualize=True)
+        return features
+    
+    def train(self, X, y):
+        """
+        Train the classifier on extracted features.
+        Args:
+            X: List of medical images
+            y: Corresponding labels (0=healthy, 1=abnormal)
+        """
+        # Extract features for all images
+        features = np.array([self.extract_features(img) for img in X])
+        
+        # Split dataset and train
+        X_train, X_test, y_train, y_test = train_test_split(features, y, test_size=0.2)
+        self.classifier.fit(X_train, y_train)
+        
+        # Evaluate performance
+        y_pred = self.classifier.predict(X_test)
+        print(f"Model accuracy: {accuracy_score(y_test, y_pred):.2f}")
+    
+    def diagnose(self, image):
+        """
+        Perform automated diagnosis on a new medical image.
+        Args:
+            image: Input medical image to diagnose
+        Returns:
+            prediction: 0 (healthy) or 1 (abnormal)
+            confidence: Prediction probability
+        """
+        features = self.extract_features(image)
+        prediction = self.classifier.predict([features])[0]
+        confidence = np.max(self.classifier.predict_proba([features]))
+        return prediction, confidence
+
+# Example usage
+if __name__ == "__main__":
+    # Mock data loading (in practice, load real medical images)
+    healthy_images = [np.random.rand(256, 256) for _ in range(50)]
+    abnormal_images = [np.random.rand(256, 256) * 1.5 for _ in range(50)]
+    
+    # Create dataset with labels
+    X = healthy_images + abnormal_images
+    y = [0] * 50 + [1] * 50
+    
+    # Initialize and train the system
+    cad_system = MedicalImageDiagnosis()
+    cad_system.train(X, y)
+    
+    # Test diagnosis on new image
+    test_image = np.random.rand(256, 256)
+    pred, conf = cad_system.diagnose(test_image)
+    print(f"Diagnosis: {'Abnormal' if pred else 'Healthy'}, Confidence: {conf:.2f}")
