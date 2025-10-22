@@ -1,0 +1,85 @@
+// Newton-Euler and Lagrange Methods for Robotics Dynamics
+public class RoboticsDynamics {
+    // Constants for robot parameters (e.g., link lengths, masses)
+    private static final double[] LINK_MASSES = {1.0, 1.5, 2.0};
+    private static final double[] LINK_LENGTHS = {0.5, 0.75, 1.0};
+    private static final double GRAVITY = 9.81;
+
+    // Newton-Euler Method: Recursive calculation of forces and torques
+    public static double[] newtonEulerForwardBackward(double[] jointAngles, double[] jointVelocities, double[] jointAccelerations) {
+        double[] torques = new double[3]; // 3-DOF robot
+        double[][] forces = new double[3][3]; // Force vectors for each link
+        double[][] moments = new double[3][3]; // Moment vectors for each link
+
+        // Forward recursion (velocities & accelerations)
+        for (int i = 0; i < 3; i++) {
+            // Calculate angular velocity/acceleration (simplified for planar robot)
+            double omega = (i == 0) ? jointVelocities[i] : jointVelocities[i] + jointVelocities[i-1];
+            double alpha = (i == 0) ? jointAccelerations[i] : jointAccelerations[i] + jointAccelerations[i-1];
+
+            // Linear acceleration at center of mass
+            double[] linearAcc = {
+                -LINK_LENGTHS[i] * omega * omega * Math.cos(jointAngles[i]),
+                -LINK_LENGTHS[i] * omega * omega * Math.sin(jointAngles[i]),
+                LINK_LENGTHS[i] * alpha
+            };
+
+            // Backward recursion (forces & torques)
+            if (i == 2) { // End effector
+                forces[i] = new double[]{0, 0, 0};
+                moments[i] = new double[]{0, 0, 0};
+            } else {
+                // Calculate interaction forces between links
+                forces[i] = new double[]{
+                    LINK_MASSES[i] * linearAcc[0],
+                    LINK_MASSES[i] * linearAcc[1] + LINK_MASSES[i] * GRAVITY,
+                    0
+                };
+                // Calculate moments
+                moments[i] = new double[]{
+                    0,
+                    0,
+                    LINK_LENGTHS[i] * forces[i][1] * Math.sin(jointAngles[i]) - 
+                    LINK_LENGTHS[i] * forces[i][0] * Math.cos(jointAngles[i])
+                };
+            }
+            torques[i] = moments[i][2]; // Z-component is the torque
+        }
+        return torques;
+    }
+
+    // Lagrange Method: Energy-based dynamics calculation
+    public static double[] lagrangeMethod(double[] jointAngles, double[] jointVelocities) {
+        double[] torques = new double[3];
+        // Simplified Lagrangian for 3-DOF planar robot
+        for (int i = 0; i < 3; i++) {
+            // Potential energy (gravity terms)
+            double potentialEnergy = 0;
+            for (int j = i; j < 3; j++) {
+                potentialEnergy += LINK_MASSES[j] * GRAVITY * 
+                    (LINK_LENGTHS[j] * Math.sin(jointAngles[j]));
+            }
+            
+            // Kinetic energy terms (simplified)
+            double kineticEnergy = 0.5 * LINK_MASSES[i] * 
+                Math.pow(jointVelocities[i] * LINK_LENGTHS[i], 2);
+            
+            // Lagrange equation: d/dt(dL/dqdot) - dL/dq = torque
+            torques[i] = LINK_MASSES[i] * LINK_LENGTHS[i] * LINK_LENGTHS[i] * 
+                jointVelocities[i] + potentialEnergy;
+        }
+        return torques;
+    }
+
+    public static void main(String[] args) {
+        // Example usage for both methods
+        double[] angles = {Math.PI/4, Math.PI/6, Math.PI/3};
+        double[] velocities = {0.1, 0.2, 0.3};
+        double[] accelerations = {0.01, 0.02, 0.03};
+        
+        System.out.println("Newton-Euler Torques: " + 
+            Arrays.toString(newtonEulerForwardBackward(angles, velocities, accelerations)));
+        System.out.println("Lagrange Torques: " + 
+            Arrays.toString(lagrangeMethod(angles, velocities)));
+    }
+}
