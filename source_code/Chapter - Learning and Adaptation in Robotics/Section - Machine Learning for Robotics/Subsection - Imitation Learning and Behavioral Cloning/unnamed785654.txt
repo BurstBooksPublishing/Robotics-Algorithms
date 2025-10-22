@@ -1,0 +1,78 @@
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * A simple implementation of Behavioral Cloning for robotics.
+ * Demonstrates imitation learning by training a policy to mimic expert demonstrations.
+ */
+public class BehavioralCloning {
+
+    // Represents a state-action pair from expert demonstrations
+    static class Demonstration {
+        double[] state;
+        double[] action;
+
+        public Demonstration(double[] state, double[] action) {
+            this.state = state;
+            this.action = action;
+        }
+    }
+
+    // Neural network policy to be trained
+    static class Policy {
+        private double[] weights; // Simplified as a linear policy for demonstration
+
+        public Policy(int stateSize, int actionSize) {
+            this.weights = new double[stateSize * actionSize];
+            // Initialize weights randomly
+            for (int i = 0; i < weights.length; i++) {
+                weights[i] = Math.random() * 0.1 - 0.05;
+            }
+        }
+
+        // Predict action given a state
+        public double[] predict(double[] state) {
+            double[] action = new double[weights.length / state.length];
+            for (int i = 0; i < action.length; i++) {
+                for (int j = 0; j < state.length; j++) {
+                    action[i] += weights[i * state.length + j] * state[j];
+                }
+            }
+            return action;
+        }
+
+        // Train the policy using supervised learning on demonstrations
+        public void train(List demonstrations, double learningRate, int epochs) {
+            for (int epoch = 0; epoch < epochs; epoch++) {
+                for (Demonstration demo : demonstrations) {
+                    double[] predictedAction = predict(demo.state);
+                    
+                    // Update weights using gradient descent
+                    for (int i = 0; i < action.length; i++) {
+                        for (int j = 0; j < demo.state.length; j++) {
+                            double error = demo.action[i] - predictedAction[i];
+                            weights[i * demo.state.length + j] += learningRate * error * demo.state[j];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        // Example usage
+        List demonstrations = new ArrayList<>();
+        // Add expert demonstrations (state-action pairs)
+        demonstrations.add(new Demonstration(new double[]{0.1, 0.2}, new double[]{0.3}));
+        demonstrations.add(new Demonstration(new double[]{0.4, 0.5}, new double[]{0.6}));
+
+        // Initialize and train policy
+        Policy policy = new Policy(2, 1);
+        policy.train(demonstrations, 0.01, 1000);
+
+        // Test the trained policy
+        double[] testState = {0.3, 0.4};
+        double[] predictedAction = policy.predict(testState);
+        System.out.println("Predicted action: " + predictedAction[0]);
+    }
+}
