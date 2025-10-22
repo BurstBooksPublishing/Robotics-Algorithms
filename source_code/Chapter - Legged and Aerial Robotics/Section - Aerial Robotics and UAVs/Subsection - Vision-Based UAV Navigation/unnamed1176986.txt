@@ -1,0 +1,59 @@
+import cv2
+import numpy as np
+import rospy
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+from geometry_msgs.msg import Twist
+
+class VisionBasedUAVNavigation:
+    def __init__(self):
+        rospy.init_node('vision_based_navigation', anonymous=True)
+        self.bridge = CvBridge()
+        self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
+        self.twist = Twist()
+        
+        # Feature detection parameters
+        self.orb = cv2.ORB_create(nfeatures=1000)
+        self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        self.prev_kp, self.prev_des = None, None
+        
+    def image_callback(self, msg):
+        try:
+            cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+            
+            # Detect ORB features
+            kp, des = self.orb.detectAndCompute(gray, None)
+            
+            if self.prev_des is not None and des is not None:
+                # Match features between frames
+                matches = self.bf.match(self.prev_des, des)
+                matches = sorted(matches, key=lambda x: x.distance)
+                
+                # Calculate optical flow vector
+                mean_x = np.mean([kp[m.trainIdx].pt[0] - self.prev_kp[m.queryIdx].pt[0] 
+                                for m in matches[:50]])
+                
+                # Simple control logic based on feature movement
+                if mean_x > 5:  # Features moving right -> UAV should yaw left
+                    self.twist.angular.z = 0.5
+                elif mean_x < -5:  # Features moving left -> UAV should yaw right
+                    self.twist.angular.z = -0.5
+                else:
+                    self.twist.angular.z = 0
+                
+                self.cmd_vel_pub.publish(self.twist)
+            
+            # Update previous frame features
+            self.prev_kp, self.prev_des = kp, des
+            
+        except Exception as e:
+            rospy.logerr(f"Vision processing error: {str(e)}")
+
+if __name__ == '__main__':
+    try:
+        navigator = VisionBasedUAVNavigation()
+        rospy.spin()
+    except rospy.ROSInterruptException:
+        pass
