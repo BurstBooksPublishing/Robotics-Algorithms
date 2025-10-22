@@ -1,0 +1,54 @@
+import numpy as np
+from typing import List, Dict
+
+class ConsensusAlgorithm:
+    """
+    Implements a decentralized consensus algorithm for multi-robot systems.
+    Assumes undirected communication topology.
+    """
+    def __init__(self, robot_ids: List[int], initial_values: Dict[int, float]):
+        self.robot_ids = robot_ids
+        self.values = initial_values  # Key: robot_id, Value: current consensus value
+        self.adjacency_matrix = self._initialize_adjacency()  # Communication topology
+
+    def _initialize_adjacency(self) -> np.ndarray:
+        """Initialize adjacency matrix (1 if robots can communicate, 0 otherwise)"""
+        size = len(self.robot_ids)
+        return np.ones((size, size)) - np.eye(size)  # Fully connected by default
+
+    def update_consensus(self, alpha: float = 0.1) -> Dict[int, float]:
+        """
+        Perform one iteration of consensus update using linear averaging.
+        alpha: step size for convergence (0 < alpha < 1)
+        """
+        new_values = {}
+        for robot_id in self.robot_ids:
+            neighbors = [id for id in self.robot_ids if self.adjacency_matrix[self.robot_ids.index(robot_id)][self.robot_ids.index(id)] == 1]
+            neighbor_avg = sum(self.values[n] for n in neighbors) / len(neighbors)
+            new_values[robot_id] = self.values[robot_id] + alpha * (neighbor_avg - self.values[robot_id])
+        
+        self.values = new_values
+        return self.values
+
+    def run_until_convergence(self, epsilon: float = 1e-4, max_iter: int = 1000) -> Dict[int, float]:
+        """
+        Run consensus until values converge or max iterations reached.
+        epsilon: convergence threshold
+        max_iter: maximum allowed iterations
+        """
+        for _ in range(max_iter):
+            prev_values = self.values.copy()
+            self.update_consensus()
+            if all(abs(self.values[id] - prev_values[id]) < epsilon for id in self.robot_ids):
+                break
+        return self.values
+
+# Example usage for 3 robots with initial values
+if __name__ == "__main__":
+    robots = [1, 2, 3]
+    initial_vals = {1: 5.0, 2: 10.0, 3: 15.0}
+    consensus = ConsensusAlgorithm(robots, initial_vals)
+    
+    print("Initial values:", consensus.values)
+    consensus.run_until_convergence()
+    print("Consensus reached:", consensus.values)
