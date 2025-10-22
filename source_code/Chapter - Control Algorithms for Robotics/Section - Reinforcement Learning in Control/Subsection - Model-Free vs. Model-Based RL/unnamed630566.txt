@@ -1,0 +1,81 @@
+import java.util.*;
+
+/**
+ * Demonstrates Model-Free (Q-Learning) vs. Model-Based (Value Iteration) RL 
+ * in robotics control. Assumes a grid-world environment for simplicity.
+ */
+public class RLControlRobotics {
+
+    // Environment parameters (e.g., grid size, obstacles, goals)
+    private static final int GRID_SIZE = 5;
+    private static final double DISCOUNT_FACTOR = 0.9;
+    private static final double LEARNING_RATE = 0.1;
+    private static final int[][] ACTIONS = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}; // Up, Down, Left, Right
+
+    // Model-Free: Q-Learning implementation
+    public static class QLearning {
+        private Map qTable = new HashMap<>();
+
+        public void updateQValue(int[] state, int[] action, double reward, int[] nextState) {
+            String stateActionKey = Arrays.toString(state) + Arrays.toString(action);
+            double currentQ = qTable.getOrDefault(stateActionKey, 0.0);
+            
+            // Find max Q for next state (greedy policy)
+            double maxNextQ = Arrays.stream(ACTIONS)
+                .mapToDouble(a -> qTable.getOrDefault(Arrays.toString(nextState) + Arrays.toString(a), 0.0))
+                .max().orElse(0.0);
+            
+            // Q-learning update rule
+            double newQ = currentQ + LEARNING_RATE * (reward + DISCOUNT_FACTOR * maxNextQ - currentQ);
+            qTable.put(stateActionKey, newQ);
+        }
+    }
+
+    // Model-Based: Value Iteration implementation (requires known transition model)
+    public static class ValueIteration {
+        private double[][] valueTable = new double[GRID_SIZE][GRID_SIZE];
+
+        public void updateValues(double[][] rewards, double[][][] transitionModel) {
+            double[][] newValues = new double[GRID_SIZE][GRID_SIZE];
+            
+            for (int x = 0; x < GRID_SIZE; x++) {
+                for (int y = 0; y < GRID_SIZE; y++) {
+                    double maxValue = Double.NEGATIVE_INFINITY;
+                    
+                    // Iterate over all possible actions
+                    for (int[] action : ACTIONS) {
+                        double actionValue = 0;
+                        // Sum over possible next states (model-based)
+                        for (int dx = 0; dx < GRID_SIZE; dx++) {
+                            for (int dy = 0; dy < GRID_SIZE; dy++) {
+                                actionValue += transitionModel[x][y][dx * GRID_SIZE + dy] * 
+                                    (rewards[dx][dy] + DISCOUNT_FACTOR * valueTable[dx][dy]);
+                            }
+                        }
+                        maxValue = Math.max(maxValue, actionValue);
+                    }
+                    newValues[x][y] = maxValue;
+                }
+            }
+            valueTable = newValues;
+        }
+    }
+
+    public static void main(String[] args) {
+        // Example usage for robotic control
+        QLearning qLearner = new QLearning();
+        ValueIteration valueIteration = new ValueIteration();
+        
+        // Simulate robot movements and learning
+        int[] currentState = {0, 0};
+        int[] action = ACTIONS[1]; // Move down
+        int[] nextState = {1, 0};
+        double reward = -0.1; // Small penalty for movement
+        
+        // Model-free update
+        qLearner.updateQValue(currentState, action, reward, nextState);
+        
+        // Model-based would require full transition model initialization
+        // valueIteration.updateValues(rewards, transitionModel);
+    }
+}
