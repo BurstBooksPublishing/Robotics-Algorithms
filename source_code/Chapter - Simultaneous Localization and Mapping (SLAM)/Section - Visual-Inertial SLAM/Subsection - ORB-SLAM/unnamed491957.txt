@@ -1,0 +1,76 @@
+import org.opencv.core.*;
+import org.opencv.features2d.*;
+import org.opencv.imgproc.Imgproc;
+import org.opencv.calib3d.Calib3d;
+import org.opencv.videoio.VideoCapture;
+
+/**
+ * ORB-SLAM implementation for Visual-Inertial SLAM in Robotics.
+ * This simplified Java example demonstrates key components of ORB feature extraction and matching.
+ */
+public class ORBSLAM {
+
+    private FeatureDetector orbDetector;
+    private DescriptorExtractor orbExtractor;
+    private DescriptorMatcher matcher;
+
+    public ORBSLAM() {
+        // Initialize ORB detector and extractor with default parameters
+        orbDetector = FeatureDetector.create(FeatureDetector.ORB);
+        orbExtractor = DescriptorExtractor.create(DescriptorExtractor.ORB);
+        matcher = DescriptorMatcher.create(DescriptorMatcher.BRUTEFORCE_HAMMING);
+    }
+
+    /**
+     * Processes a frame for ORB-SLAM pipeline
+     * @param frame Input image frame
+     * @return Matched keypoints between current and previous frame
+     */
+    public MatOfDMatch processFrame(Mat frame) {
+        // Convert to grayscale for feature detection
+        Mat grayFrame = new Mat();
+        Imgproc.cvtColor(frame, grayFrame, Imgproc.COLOR_BGR2GRAY);
+
+        // Detect ORB features
+        MatOfKeyPoint keyPoints = new MatOfKeyPoint();
+        orbDetector.detect(grayFrame, keyPoints);
+
+        // Extract descriptors
+        Mat descriptors = new Mat();
+        orbExtractor.compute(grayFrame, keyPoints, descriptors);
+
+        // Matching with previous frame (if available)
+        if (previousDescriptors != null && !previousDescriptors.empty()) {
+            MatOfDMatch matches = new MatOfDMatch();
+            matcher.match(previousDescriptors, descriptors, matches);
+            previousDescriptors = descriptors.clone();
+            return matches;
+        } else {
+            previousDescriptors = descriptors.clone();
+            return new MatOfDMatch();
+        }
+    }
+
+    private Mat previousDescriptors = new Mat();
+
+    public static void main(String[] args) {
+        // Load OpenCV native library
+        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+
+        // Initialize ORB-SLAM system
+        ORBSLAM slamSystem = new ORBSLAM();
+
+        // Capture video from default camera
+        VideoCapture camera = new VideoCapture(0);
+        Mat frame = new Mat();
+
+        while (camera.read(frame)) {
+            // Process each frame
+            MatOfDMatch matches = slamSystem.processFrame(frame);
+
+            // SLAM pipeline would continue with pose estimation, mapping, etc.
+            // (Simplified for this example)
+        }
+        camera.release();
+    }
+}
