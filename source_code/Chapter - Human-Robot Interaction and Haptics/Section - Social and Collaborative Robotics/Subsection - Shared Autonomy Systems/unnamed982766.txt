@@ -1,0 +1,77 @@
+import numpy as np
+from scipy.spatial import distance
+from typing import Tuple, Optional
+
+class SharedAutonomyController:
+    """A shared autonomy system blending human input with autonomous robot control."""
+    
+    def __init__(self, robot_dynamics_gain: float = 0.7, human_trust_threshold: float = 0.5):
+        """
+        Initialize shared autonomy controller.
+        
+        Args:
+            robot_dynamics_gain: Weight of robot's autonomous decision (0-1)
+            human_trust_threshold: Confidence threshold to override human input
+        """
+        self.robot_gain = robot_dynamics_gain
+        self.trust_threshold = human_trust_threshold
+        
+    def blend_controls(self, 
+                      human_input: np.ndarray, 
+                      robot_input: np.ndarray,
+                      confidence: Optional[float] = None) -> np.ndarray:
+        """
+        Blend human and robot inputs based on confidence and dynamics.
+        
+        Args:
+            human_input: Vector of human control input
+            robot_input: Vector of robot's suggested action
+            confidence: Optional confidence metric (0-1) of human intent
+            
+        Returns:
+            Blended control vector
+        """
+        if confidence is None:
+            # Default blending when no confidence metric is provided
+            return self.robot_gain * robot_input + (1 - self.robot_gain) * human_input
+        
+        if confidence < self.trust_threshold:
+            # Override human input when confidence is low
+            return robot_input
+        else:
+            # Adaptive blending based on confidence
+            adaptive_gain = self.robot_gain * (1 - confidence)
+            return adaptive_gain * robot_input + (1 - adaptive_gain) * human_input
+
+    def compute_trajectory_similarity(self, 
+                                     human_traj: np.ndarray, 
+                                     robot_traj: np.ndarray) -> float:
+        """
+        Compute similarity between human and robot trajectories using DTW distance.
+        
+        Args:
+            human_traj: Nx2 array of human trajectory points
+            robot_traj: Nx2 array of robot trajectory points
+            
+        Returns:
+            Normalized similarity score (0-1)
+        """
+        # Compute Dynamic Time Warping distance
+        dtw_dist = distance.dtw(human_traj, robot_traj).distance
+        
+        # Normalize by maximum possible distance
+        max_dist = np.linalg.norm(human_traj[0] - robot_traj[-1])
+        return 1 - (dtw_dist / (max_dist + 1e-6))  # Avoid division by zero
+
+# Example usage
+if __name__ == "__main__":
+    # Initialize controller with moderate robot influence
+    controller = SharedAutonomyController(robot_dynamics_gain=0.6)
+    
+    # Sample inputs (2D velocity vectors)
+    human_vel = np.array([0.8, 0.2])
+    robot_vel = np.array([0.3, 0.9])
+    
+    # Blend with high confidence in human input
+    blended_vel = controller.blend_controls(human_vel, robot_vel, confidence=0.8)
+    print(f"Blended velocity: {blended_vel}")
