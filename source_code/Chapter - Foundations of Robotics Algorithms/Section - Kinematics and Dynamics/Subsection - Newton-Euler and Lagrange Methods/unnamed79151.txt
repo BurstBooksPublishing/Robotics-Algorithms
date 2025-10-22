@@ -1,0 +1,64 @@
+import numpy as np
+from scipy.integrate import odeint
+
+def newton_euler_dynamics(theta, theta_dot, theta_ddot, m, l, g=9.81):
+    """
+    Compute joint torques using Newton-Euler method for a simple 2D pendulum.
+    
+    Args:
+        theta: Joint angle (rad)
+        theta_dot: Joint angular velocity (rad/s)
+        theta_ddot: Joint angular acceleration (rad/s²)
+        m: Mass of the pendulum (kg)
+        l: Length of the pendulum (m)
+        g: Gravitational acceleration (m/s²)
+    
+    Returns:
+        tau: Joint torque (Nm)
+    """
+    # Inertial torque
+    tau_inertia = m * l**2 * theta_ddot
+    # Centrifugal/Coriolis torque (zero for single joint)
+    tau_centrifugal = 0
+    # Gravitational torque
+    tau_gravity = m * g * l * np.sin(theta)
+    
+    return tau_inertia + tau_centrifugal + tau_gravity
+
+def lagrange_equations_of_motion(y, t, m, l, g=9.81):
+    """
+    Compute derivatives for Lagrange's equations for a simple pendulum.
+    
+    Args:
+        y: State vector [theta, theta_dot]
+        t: Time (unused, required by odeint)
+        m: Mass of the pendulum (kg)
+        l: Length of the pendulum (m)
+        g: Gravitational acceleration (m/s²)
+    
+    Returns:
+        dy/dt: Derivatives [theta_dot, theta_ddot]
+    """
+    theta, theta_dot = y
+    # Lagrangian equation of motion for simple pendulum
+    theta_ddot = -(g/l) * np.sin(theta)
+    return [theta_dot, theta_ddot]
+
+# Example usage
+if __name__ == "__main__":
+    # System parameters
+    m = 1.0  # kg
+    l = 1.0  # m
+    g = 9.81  # m/s²
+    
+    # Newton-Euler example
+    theta = np.pi/4  # 45 degrees
+    theta_dot = 0.5  # rad/s
+    theta_ddot = 0.2  # rad/s²
+    tau = newton_euler_dynamics(theta, theta_dot, theta_ddot, m, l, g)
+    print(f"Newton-Euler torque: {tau:.2f} Nm")
+    
+    # Lagrange example - simulate pendulum motion
+    t = np.linspace(0, 10, 1000)  # 10 seconds simulation
+    y0 = [np.pi/4, 0]  # Initial [angle, angular velocity]
+    sol = odeint(lagrange_equations_of_motion, y0, t, args=(m, l, g))
