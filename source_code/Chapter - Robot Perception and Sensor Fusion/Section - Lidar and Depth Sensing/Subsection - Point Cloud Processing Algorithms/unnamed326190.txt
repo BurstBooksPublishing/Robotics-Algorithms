@@ -1,0 +1,137 @@
+import java.util.List;
+import org.apache.commons.math3.geometry.euclidean.threed.Vector3D;
+
+/**
+ * Advanced point cloud processing algorithms for robotics perception.
+ * Includes downsampling, outlier removal, and plane segmentation.
+ */
+public class PointCloudProcessor {
+
+    /**
+     * Downsamples a point cloud using a voxel grid filter.
+     * @param points Input point cloud
+     * @param voxelSize Size of each voxel cube edge (in meters)
+     * @return Downsampled point cloud
+     */
+    public List voxelGridDownsample(List points, double voxelSize) {
+        // Create voxel grid structure
+        VoxelGrid grid = new VoxelGrid(voxelSize);
+        
+        // Assign points to voxels
+        for (Vector3D point : points) {
+            grid.addPoint(point);
+        }
+        
+        // Return centroid of each occupied voxel
+        return grid.getVoxelCentroids();
+    }
+
+    /**
+     * Removes statistical outliers from point cloud
+     * @param points Input point cloud
+     * @param kNeighbors Number of neighbors to analyze
+     * @param stdDevMultiplier Threshold multiplier for standard deviation
+     * @return Filtered point cloud
+     */
+    public List removeOutliers(List points, int kNeighbors, double stdDevMultiplier) {
+        // Calculate mean distance to k-nearest neighbors for each point
+        double[] distances = new double[points.size()];
+        for (int i = 0; i < points.size(); i++) {
+            distances[i] = calculateMeanKnnDistance(points, i, kNeighbors);
+        }
+        
+        // Compute statistics and filter outliers
+        double mean = calculateMean(distances);
+        double stdDev = calculateStdDev(distances, mean);
+        double threshold = mean + stdDevMultiplier * stdDev;
+        
+        return points.stream()
+            .filter(p -> {
+                int index = points.indexOf(p);
+                return distances[index] < threshold;
+            })
+            .toList();
+    }
+
+    /**
+     * Segments dominant plane using RANSAC algorithm
+     * @param points Input point cloud
+     * @param maxIterations Maximum RANSAC iterations
+     * @param distanceThreshold Inlier distance threshold
+     * @return Plane equation coefficients (ax + by + cz + d = 0)
+     */
+    public double[] ransacPlaneSegmentation(List points, int maxIterations, double distanceThreshold) {
+        double[] bestModel = null;
+        int maxInliers = 0;
+        
+        for (int i = 0; i < maxIterations; i++) {
+            // Randomly sample 3 points
+            Vector3D p1 = points.get((int)(Math.random() * points.size()));
+            Vector3D p2 = points.get((int)(Math.random() * points.size()));
+            Vector3D p3 = points.get((int)(Math.random() * points.size()));
+            
+            // Calculate plane equation
+            Vector3D normal = p2.subtract(p1).crossProduct(p3.subtract(p1)).normalize();
+            double d = -normal.dotProduct(p1);
+            double[] model = {normal.getX(), normal.getY(), normal.getZ(), d};
+            
+            // Count inliers
+            int inliers = countInliers(points, model, distanceThreshold);
+            
+            // Update best model if better fit found
+            if (inliers > maxInliers) {
+                maxInliers = inliers;
+                bestModel = model;
+            }
+        }
+        
+        return bestModel;
+    }
+
+    // Helper methods would be implemented here...
+    private double calculateMeanKnnDistance(List points, int index, int k) { /* ... */ }
+    private double calculateMean(double[] values) { /* ... */ }
+    private double calculateStdDev(double[] values, double mean) { /* ... */ }
+    private int countInliers(List points, double[] model, double threshold) { /* ... */ }
+}
+
+/**
+ * Helper class for voxel grid operations
+ */
+class VoxelGrid {
+    private Map> voxels;
+    private double size;
+    
+    public VoxelGrid(double size) {
+        this.size = size;
+        this.voxels = new HashMap<>();
+    }
+    
+    public void addPoint(Vector3D point) {
+        String key = getVoxelKey(point);
+        voxels.computeIfAbsent(key, k -> new ArrayList<>()).add(point);
+    }
+    
+    public List getVoxelCentroids() {
+        return voxels.values().stream()
+            .map(this::calculateCentroid)
+            .toList();
+    }
+    
+    private String getVoxelKey(Vector3D point) {
+        int x = (int)(point.getX() / size);
+        int y = (int)(point.getY() / size);
+        int z = (int)(point.getZ() / size);
+        return x + "," + y + "," + z;
+    }
+    
+    private Vector3D calculateCentroid(List points) {
+        double x = 0, y = 0, z = 0;
+        for (Vector3D p : points) {
+            x += p.getX();
+            y += p.getY();
+            z += p.getZ();
+        }
+        return new Vector3D(x/points.size(), y/points.size(), z/points.size());
+    }
+}
