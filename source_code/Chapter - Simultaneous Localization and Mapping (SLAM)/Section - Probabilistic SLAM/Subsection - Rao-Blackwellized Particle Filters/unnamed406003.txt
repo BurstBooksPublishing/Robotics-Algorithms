@@ -1,0 +1,74 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import multivariate_normal
+
+class RaoBlackwellizedParticleFilter:
+    def __init__(self, num_particles, motion_noise, measurement_noise):
+        self.num_particles = num_particles
+        self.motion_noise = motion_noise
+        self.measurement_noise = measurement_noise
+        self.particles = np.random.uniform(-1, 1, (num_particles, 3))  # [x, y, theta]
+        self.weights = np.ones(num_particles) / num_particles
+        self.map_estimates = [np.zeros((2, 2)) for _ in range(num_particles)]  # Simple 2-landmark map per particle
+
+    def predict(self, control_input):
+        """Propagate particles through motion model"""
+        for i in range(self.num_particles):
+            # Add noise to control input
+            noisy_control = control_input + np.random.normal(0, self.motion_noise, 3)
+            # Update particle pose (simple unicycle model)
+            self.particles[i, 0] += noisy_control[0] * np.cos(self.particles[i, 2])
+            self.particles[i, 1] += noisy_control[0] * np.sin(self.particles[i, 2])
+            self.particles[i, 2] += noisy_control[1]
+
+    def update(self, measurement):
+        """Update weights based on measurement likelihood"""
+        for i in range(self.num_particles):
+            # Rao-Blackwellized step: Update map estimate (Kalman Filter) for each particle
+            for j in range(len(self.map_estimates[i])):
+                # Simplified EKF update for landmark positions
+                expected_meas = np.linalg.norm(self.particles[i, :2] - self.map_estimates[i][j])
+                innovation = measurement[j] - expected_meas
+                self.weights[i] *= multivariate_normal.pdf(innovation, cov=self.measurement_noise)
+            
+            # Normalize weights
+        self.weights += 1e-300  # Avoid zero weights
+        self.weights /= np.sum(self.weights)
+
+    def resample(self):
+        """Systematic resampling of particles"""
+        indices = np.random.choice(range(self.num_particles), size=self.num_particles, p=self.weights)
+        self.particles = self.particles[indices]
+        self.map_estimates = [self.map_estimates[i] for i in indices]
+        self.weights = np.ones(self.num_particles) / self.num_particles
+
+    def run_slam(self, controls, measurements):
+        """Main SLAM loop"""
+        estimated_trajectory = []
+        for t in range(len(controls)):
+            self.predict(controls[t])
+            self.update(measurements[t])
+            self.resample()
+            # Store best particle's pose
+            best_particle = np.argmax(self.weights)
+            estimated_trajectory.append(self.particles[best_particle])
+        return np.array(estimated_trajectory)
+
+# Example usage
+if __name__ == "__main__":
+    # Simulation parameters
+    num_steps = 50
+    num_particles = 100
+    
+    # Create synthetic controls and measurements
+    controls = np.column_stack([np.ones(num_steps), np.linspace(0, 0.1, num_steps), np.zeros(num_steps)])
+    measurements = np.random.normal(1.0, 0.1, (num_steps, 2))  # 2 landmarks
+    
+    # Initialize and run RBPF
+    rbpf = RaoBlackwellizedParticleFilter(num_particles, motion_noise=0.1, measurement_noise=0.1)
+    trajectory = rbpf.run_slam(controls, measurements)
+    
+    # Plot results
+    plt.plot(trajectory[:, 0], trajectory[:, 1], 'b-', label='Estimated Path')
+    plt.legend()
+    plt.show()
