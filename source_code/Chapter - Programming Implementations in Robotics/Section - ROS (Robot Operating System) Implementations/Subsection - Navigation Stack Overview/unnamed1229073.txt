@@ -1,0 +1,78 @@
+// Import ROS Java libraries for navigation stack implementation
+import org.ros.namespace.GraphName;
+import org.ros.node.AbstractNodeMain;
+import org.ros.node.ConnectedNode;
+import org.ros.node.topic.Publisher;
+import geometry_msgs.PoseStamped;
+import nav_msgs.Path;
+import nav_msgs.Odometry;
+
+/**
+ * Advanced Java implementation of ROS Navigation Stack integration
+ * for robotic path planning and obstacle avoidance.
+ * Part of Chapter 11: Programming Implementations in Robotics - ROS section.
+ */
+public class NavigationStackController extends AbstractNodeMain {
+    private Publisher pathPublisher;
+    private Publisher goalPublisher;
+    private String robotNamespace;
+
+    public NavigationStackController(String robotNamespace) {
+        this.robotNamespace = robotNamespace;
+    }
+
+    @Override
+    public GraphName getDefaultNodeName() {
+        return GraphName.of(robotNamespace + "/navigation_controller");
+    }
+
+    @Override
+    public void onStart(ConnectedNode connectedNode) {
+        // Initialize publishers for navigation stack communication
+        pathPublisher = connectedNode.newPublisher(robotNamespace + "/path", Path._TYPE);
+        goalPublisher = connectedNode.newPublisher(robotNamespace + "/move_base_simple/goal", PoseStamped._TYPE);
+
+        // Subscribe to odometry for position feedback
+        connectedNode.newSubscriber(robotNamespace + "/odom", Odometry._TYPE, odom -> {
+            // Process odometry data for navigation feedback
+            processOdometerData(odom);
+        });
+    }
+
+    /**
+     * Sends navigation goal to move_base node
+     * @param x Target x coordinate
+     * @param y Target y coordinate
+     * @param theta Target orientation (radians)
+     */
+    public void sendNavigationGoal(double x, double y, double theta) {
+        PoseStamped goal = goalPublisher.newMessage();
+        goal.getHeader().setFrameId("map");
+        goal.getPose().getPosition().setX(x);
+        goal.getPose().getPosition().setY(y);
+        goal.getPose().getOrientation().setZ(Math.sin(theta/2));
+        goal.getPose().getOrientation().setW(Math.cos(theta/2));
+        goalPublisher.publish(goal);
+    }
+
+    private void processOdometerData(Odometry odom) {
+        // Implement odometry data processing for navigation feedback
+        // Typically includes position tracking and error calculation
+    }
+
+    /**
+     * Publishes a pre-computed path to the navigation stack
+     * @param pathPoints Array of path waypoints
+     */
+    public void publishPath(Point[] pathPoints) {
+        Path path = pathPublisher.newMessage();
+        path.getHeader().setFrameId("map");
+        for (Point p : pathPoints) {
+            PoseStamped pose = connectedNode.getTopicMessageFactory().newFromType(PoseStamped._TYPE);
+            pose.getPose().getPosition().setX(p.x);
+            pose.getPose().getPosition().setY(p.y);
+            path.getPoses().add(pose);
+        }
+        pathPublisher.publish(path);
+    }
+}
