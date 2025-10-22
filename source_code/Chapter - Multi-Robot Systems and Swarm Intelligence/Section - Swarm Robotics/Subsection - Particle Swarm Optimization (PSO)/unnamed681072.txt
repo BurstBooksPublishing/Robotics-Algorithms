@@ -1,0 +1,106 @@
+import java.util.Random;
+
+public class PSO {
+    // Parameters
+    private static final int SWARM_SIZE = 30;
+    private static final int MAX_ITERATIONS = 100;
+    private static final double C1 = 2.0; // Cognitive coefficient
+    private static final double C2 = 2.0; // Social coefficient
+    private static final double W = 0.7;  // Inertia weight
+
+    // Particle class representing a robot in the swarm
+    class Particle {
+        double[] position;
+        double[] velocity;
+        double[] bestPosition;
+        double bestFitness;
+
+        public Particle(int dim) {
+            position = new double[dim];
+            velocity = new double[dim];
+            bestPosition = new double[dim];
+            bestFitness = Double.POSITIVE_INFINITY;
+            
+            // Initialize position and velocity randomly
+            Random rand = new Random();
+            for (int i = 0; i < dim; i++) {
+                position[i] = rand.nextDouble() * 10 - 5; // Range [-5,5]
+                velocity[i] = rand.nextDouble() * 2 - 1;  // Range [-1,1]
+            }
+        }
+    }
+
+    // Objective function (example: minimize distance to target)
+    private double evaluateFitness(double[] position) {
+        double sum = 0;
+        for (double p : position) {
+            sum += p * p; // Simple sphere function (min at 0)
+        }
+        return sum;
+    }
+
+    // PSO main algorithm
+    public void runPSO(int dimensions) {
+        Particle[] swarm = new Particle[SWARM_SIZE];
+        double[] globalBestPosition = new double[dimensions];
+        double globalBestFitness = Double.POSITIVE_INFINITY;
+        Random rand = new Random();
+
+        // Initialize swarm
+        for (int i = 0; i < SWARM_SIZE; i++) {
+            swarm[i] = new Particle(dimensions);
+            double fitness = evaluateFitness(swarm[i].position);
+            
+            // Update personal best
+            if (fitness < swarm[i].bestFitness) {
+                swarm[i].bestFitness = fitness;
+                System.arraycopy(swarm[i].position, 0, swarm[i].bestPosition, 0, dimensions);
+            }
+            
+            // Update global best
+            if (fitness < globalBestFitness) {
+                globalBestFitness = fitness;
+                System.arraycopy(swarm[i].position, 0, globalBestPosition, 0, dimensions);
+            }
+        }
+
+        // Main optimization loop
+        for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
+            for (Particle p : swarm) {
+                // Update velocity and position for each dimension
+                for (int d = 0; d < dimensions; d++) {
+                    double r1 = rand.nextDouble();
+                    double r2 = rand.nextDouble();
+                    
+                    // Velocity update equation
+                    p.velocity[d] = W * p.velocity[d] +
+                                   C1 * r1 * (p.bestPosition[d] - p.position[d]) +
+                                   C2 * r2 * (globalBestPosition[d] - p.position[d]);
+                    
+                    // Position update
+                    p.position[d] += p.velocity[d];
+                }
+                
+                // Evaluate new position
+                double fitness = evaluateFitness(p.position);
+                
+                // Update personal best
+                if (fitness < p.bestFitness) {
+                    p.bestFitness = fitness;
+                    System.arraycopy(p.position, 0, p.bestPosition, 0, dimensions);
+                    
+                    // Update global best
+                    if (fitness < globalBestFitness) {
+                        globalBestFitness = fitness;
+                        System.arraycopy(p.position, 0, globalBestPosition, 0, dimensions);
+                    }
+                }
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        PSO pso = new PSO();
+        pso.runPSO(2); // 2D optimization problem
+    }
+}
