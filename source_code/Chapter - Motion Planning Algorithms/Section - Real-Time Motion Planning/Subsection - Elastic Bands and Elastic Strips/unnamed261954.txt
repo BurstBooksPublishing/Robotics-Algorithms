@@ -1,0 +1,74 @@
+import numpy as np
+from scipy.interpolate import splprep, splev
+from scipy.spatial.distance import cdist
+
+class ElasticBand:
+    """
+    Implements the Elastic Band algorithm for real-time motion planning.
+    Represents a deformable path that avoids obstacles while maintaining smoothness.
+    """
+    def __init__(self, initial_path, obstacle_points, alpha=0.3, beta=0.1):
+        """
+        Initialize elastic band with initial path and obstacle points.
+        
+        Args:
+            initial_path (np.ndarray): Initial path points (N x 2)
+            obstacle_points (np.ndarray): Obstacle coordinates (M x 2)
+            alpha (float): Elasticity coefficient
+            beta (float): Repulsion coefficient
+        """
+        self.path = initial_path.copy()
+        self.obstacles = obstacle_points.copy()
+        self.alpha = alpha  # Controls elasticity (path smoothness)
+        self.beta = beta    # Controls repulsion from obstacles
+
+    def _calculate_internal_forces(self):
+        """Calculate internal elastic forces (contraction/smoothing)."""
+        forces = np.zeros_like(self.path)
+        # Apply tension between consecutive points
+        forces[1:-1] = self.alpha * (self.path[:-2] - 2 * self.path[1:-1] + self.path[2:])
+        return forces
+
+    def _calculate_external_forces(self):
+        """Calculate repulsive forces from obstacles."""
+        forces = np.zeros_like(self.path)
+        if len(self.obstacles) == 0:
+            return forces
+            
+        # Compute distances between all path points and obstacles
+        distances = cdist(self.path, self.obstacles)
+        min_dist_indices = np.argmin(distances, axis=1)
+        min_distances = distances[np.arange(len(self.path)), min_dist_indices]
+        
+        # Avoid division by zero for very close obstacles
+        min_distances = np.maximum(min_distances, 1e-3)
+        
+        # Compute repulsion direction vectors
+        repulsion_dirs = self.path[:, None] - self.obstacles[min_dist_indices]
+        repulsion_dirs /= np.linalg.norm(repulsion_dirs, axis=1)[:, None]
+        
+        # Apply inverse square law repulsion
+        forces = (self.beta / (min_distances ** 2))[:, None] * repulsion_dirs
+        return forces
+
+    def update(self, num_iterations=10):
+        """Perform iterative optimization of the elastic band."""
+        for _ in range(num_iterations):
+            internal_f = self._calculate_internal_forces()
+            external_f = self._calculate_external_forces()
+            
+            # Update path points (except fixed start and end)
+            self.path[1:-1] += internal_f[1:-1] + external_f[1:-1]
+            
+            # Optional: Resample path for smoothness
+            if _ % 3 == 0:  # Resample every 3 iterations
+                self._resample_path()
+        return self.path
+
+    def _resample_path(self):
+        """Resample path using spline interpolation for smoothness."""
+        if len(self.path) < 4:
+            return
+        tck, _ = splprep(self.path.T, s=0)  # Cubic spline fit
+        new_points = np.linspace(0, 1, len(self.path))
+        self.path = np.column_stack(splev(new_points, tck))
