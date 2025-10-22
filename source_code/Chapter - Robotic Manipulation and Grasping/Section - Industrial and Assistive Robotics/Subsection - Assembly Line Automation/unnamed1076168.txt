@@ -1,0 +1,73 @@
+/**
+ * Simulates an assembly line automation system using robotic manipulators.
+ * This code demonstrates part picking, placement, and conveyor synchronization.
+ * Context: Robotics Algorithms - Chapter 9: Robotic Manipulation and Grasping
+ */
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+
+public class AssemblyLineAutomation {
+    private static final int CONVEYOR_CAPACITY = 10;
+    private BlockingQueue conveyorBelt = new LinkedBlockingQueue<>(CONVEYOR_CAPACITY);
+
+    // Robotic arm controller for part picking
+    class PickAndPlaceRobot implements Runnable {
+        private String robotId;
+        private int processingTimeMs;
+
+        public PickAndPlaceRobot(String id, int speed) {
+            this.robotId = id;
+            this.processingTimeMs = speed;
+        }
+
+        @Override
+        public void run() {
+            try {
+                while (true) {
+                    String part = conveyorBelt.take(); // Block until part available
+                    System.out.println(robotId + " picking part: " + part);
+                    
+                    // Simulate processing time
+                    Thread.sleep(processingTimeMs);
+                    
+                    System.out.println(robotId + " placed processed part");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    // Conveyor belt feeder
+    class PartFeeder implements Runnable {
+        private int partCounter = 0;
+
+        @Override
+        public void run() {
+            try {
+                while (true) {
+                    String part = "PART-" + (++partCounter);
+                    conveyorBelt.put(part); // Block if conveyor full
+                    System.out.println("Fed new part: " + part);
+                    Thread.sleep(500); // Fixed feed rate
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    public void startAssemblyLine() {
+        // Create 3 robotic arms with different speeds
+        new Thread(new PickAndPlaceRobot("ARM-1", 800)).start();
+        new Thread(new PickAndPlaceRobot("ARM-2", 1200)).start();
+        new Thread(new PickAndPlaceRobot("ARM-3", 1000)).start();
+        
+        // Start part feeder
+        new Thread(new PartFeeder()).start();
+    }
+
+    public static void main(String[] args) {
+        new AssemblyLineAutomation().startAssemblyLine();
+    }
+}
