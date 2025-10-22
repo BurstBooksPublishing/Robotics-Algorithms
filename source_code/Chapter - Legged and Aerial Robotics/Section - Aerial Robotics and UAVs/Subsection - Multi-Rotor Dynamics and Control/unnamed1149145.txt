@@ -1,0 +1,99 @@
+/**
+ * A simplified Java implementation of multi-rotor dynamics and control
+ * for UAVs, focusing on attitude stabilization.
+ * Assumes a quadcopter model with X-configuration.
+ */
+public class MultiRotorController {
+    // Physical parameters (simplified)
+    private final double mass;          // kg
+    private final double armLength;     // m
+    private final double inertiaXX;     // kg·m²
+    private final double inertiaYY;     // kg·m²
+    private final double inertiaZZ;     // kg·m²
+
+    // Controller gains
+    private final double kpRoll, kiRoll, kdRoll;    // PID gains for roll
+    private final double kpPitch, kiPitch, kdPitch; // PID gains for pitch
+    private final double kpYaw, kiYaw, kdYaw;       // PID gains for yaw
+
+    // State variables
+    private double[] angularVelocity = new double[3]; // [roll, pitch, yaw] rates (rad/s)
+    private double[] attitudeErrorIntegral = new double[3]; // Integral term storage
+
+    public MultiRotorController(double mass, double armLength, 
+                              double inertiaXX, double inertiaYY, double inertiaZZ) {
+        this.mass = mass;
+        this.armLength = armLength;
+        this.inertiaXX = inertiaXX;
+        this.inertiaYY = inertiaYY;
+        this.inertiaZZ = inertiaZZ;
+
+        // Initialize PID gains (these would normally be tuned)
+        this.kpRoll = 1.2; this.kiRoll = 0.01; this.kdRoll = 0.2;
+        this.kpPitch = 1.2; this.kiPitch = 0.01; this.kdPitch = 0.2;
+        this.kpYaw = 0.8; this.kiYaw = 0.005; this.kdYaw = 0.1;
+    }
+
+    /**
+     * Computes motor commands to achieve desired attitude
+     * @param desiredAttitude [roll, pitch, yaw] in radians
+     * @param currentAttitude [roll, pitch, yaw] in radians
+     * @param dt time step in seconds
+     * @return motor thrusts [front_left, front_right, rear_left, rear_right] in N
+     */
+    public double[] computeControl(double[] desiredAttitude, 
+                                 double[] currentAttitude, 
+                                 double dt) {
+        // Calculate attitude errors
+        double[] error = new double[3];
+        for (int i = 0; i < 3; i++) {
+            error[i] = desiredAttitude[i] - currentAttitude[i];
+            attitudeErrorIntegral[i] += error[i] * dt; // Update integral term
+        }
+
+        // Calculate angular velocity errors (simplified)
+        double[] desiredAngularVelocity = new double[3]; // Would come from trajectory planner
+        double[] angularVelocityError = new double[3];
+        for (int i = 0; i < 3; i++) {
+            angularVelocityError[i] = desiredAngularVelocity[i] - angularVelocity[i];
+        }
+
+        // PID control for each axis
+        double rollTorque = kpRoll * error[0] + kiRoll * attitudeErrorIntegral[0] 
+                          + kdRoll * angularVelocityError[0];
+        double pitchTorque = kpPitch * error[1] + kiPitch * attitudeErrorIntegral[1] 
+                           + kdPitch * angularVelocityError[1];
+        double yawTorque = kpYaw * error[2] + kiYaw * attitudeErrorIntegral[2] 
+                         + kdYaw * angularVelocityError[2];
+
+        // Convert torques to individual motor thrusts (X-configuration)
+        double baseThrust = mass * 9.81 / 4; // Equal thrust for hover
+        double[] motorThrusts = new double[4];
+        motorThrusts[0] = baseThrust + (rollTorque + pitchTorque + yawTorque) / (4 * armLength);
+        motorThrusts[1] = baseThrust + (-rollTorque + pitchTorque - yawTorque) / (4 * armLength);
+        motorThrusts[2] = baseThrust + (rollTorque - pitchTorque - yawTorque) / (4 * armLength);
+        motorThrusts[3] = baseThrust + (-rollTorque - pitchTorque + yawTorque) / (4 * armLength);
+
+        return motorThrusts;
+    }
+
+    /**
+     * Updates the system state (simplified dynamics)
+     * @param motorThrusts current motor thrusts
+     * @param dt time step in seconds
+     */
+    public void updateState(double[] motorThrusts, double dt) {
+        // Calculate net torques (simplified)
+        double rollTorque = armLength * (motorThrusts[0] - motorThrusts[1] 
+                       + motorThrusts[2] - motorThrusts[3]);
+        double pitchTorque = armLength * (motorThrusts[0] + motorThrusts[1] 
+                        - motorThrusts[2] - motorThrusts[3]);
+        double yawTorque = 0.1 * (-motorThrusts[0] + motorThrusts[1] 
+                     - motorThrusts[2] + motorThrusts[3]); // Simplified yaw model
+
+        // Update angular velocities (Euler integration)
+        angularVelocity[0] += (rollTorque / inertiaXX) * dt;
+        angularVelocity[1] += (pitchTorque / inertiaYY) * dt;
+        angularVelocity[2] += (yawTorque / inertiaZZ) * dt;
+    }
+}
