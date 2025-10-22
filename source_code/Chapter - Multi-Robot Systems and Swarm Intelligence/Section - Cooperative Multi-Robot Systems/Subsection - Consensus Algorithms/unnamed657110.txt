@@ -1,0 +1,79 @@
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Simulates a consensus algorithm for multi-robot systems using the
+ * "Robotic Average Consensus" approach. Robots adjust their states
+ * based on neighbors' states to reach agreement.
+ */
+public class ConsensusAlgorithm {
+    private List robots;
+    private double[][] adjacencyMatrix; // Connectivity graph (1 = connected, 0 = disconnected)
+
+    public ConsensusAlgorithm(int numRobots) {
+        robots = new ArrayList<>();
+        adjacencyMatrix = new double[numRobots][numRobots];
+        initializeRobots(numRobots);
+    }
+
+    // Initialize robots with random states and connectivity
+    private void initializeRobots(int numRobots) {
+        for (int i = 0; i < numRobots; i++) {
+            robots.add(new Robot(Math.random() * 10)); // Random initial state
+            for (int j = 0; j < numRobots; j++) {
+                adjacencyMatrix[i][j] = (i != j && Math.random() > 0.5) ? 1 : 0; // Random connectivity
+            }
+        }
+    }
+
+    // Update robot states based on neighbors' states (consensus iteration)
+    public void updateConsensus() {
+        List newStates = new ArrayList<>();
+        for (int i = 0; i < robots.size(); i++) {
+            double sum = 0;
+            int neighbors = 0;
+            for (int j = 0; j < robots.size(); j++) {
+                if (adjacencyMatrix[i][j] == 1) {
+                    sum += robots.get(j).getState();
+                    neighbors++;
+                }
+            }
+            // Update rule: average of neighbors' states
+            newStates.add(neighbors > 0 ? sum / neighbors : robots.get(i).getState());
+        }
+        // Apply new states
+        for (int i = 0; i < robots.size(); i++) {
+            robots.get(i).setState(newStates.get(i));
+        }
+    }
+
+    // Robot class representing individual agents
+    private static class Robot {
+        private double state; // State to reach consensus on (e.g., position, velocity)
+
+        public Robot(double initialState) {
+            this.state = initialState;
+        }
+
+        public double getState() {
+            return state;
+        }
+
+        public void setState(double state) {
+            this.state = state;
+        }
+    }
+
+    // Example usage
+    public static void main(String[] args) {
+        ConsensusAlgorithm consensus = new ConsensusAlgorithm(5); // 5 robots
+        System.out.println("Initial states:");
+        consensus.robots.forEach(r -> System.out.print(r.getState() + " "));
+
+        for (int i = 0; i < 10; i++) { // Run 10 consensus iterations
+            consensus.updateConsensus();
+            System.out.println("\nAfter iteration " + (i + 1) + ":");
+            consensus.robots.forEach(r -> System.out.print(r.getState() + " "));
+        }
+    }
+}
