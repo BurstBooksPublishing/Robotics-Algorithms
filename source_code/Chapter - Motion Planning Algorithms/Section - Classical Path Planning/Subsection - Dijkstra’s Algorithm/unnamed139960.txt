@@ -1,0 +1,92 @@
+import java.util.*;
+
+/**
+ * Dijkstra's Algorithm implementation for Robotics Path Planning.
+ * Finds the shortest path from a start node to all other nodes in a weighted graph.
+ */
+public class DijkstraAlgorithm {
+
+    // Represents a node in the graph with its cost and previous node
+    static class Node {
+        int id;
+        int cost;
+        Node previous;
+
+        Node(int id, int cost, Node previous) {
+            this.id = id;
+            this.cost = cost;
+            this.previous = previous;
+        }
+    }
+
+    // Graph representation as adjacency list (node -> {neighbor, edge cost})
+    private Map> graph;
+
+    public DijkstraAlgorithm() {
+        this.graph = new HashMap<>();
+    }
+
+    // Add a directed edge to the graph
+    public void addEdge(int from, int to, int cost) {
+        graph.computeIfAbsent(from, k -> new ArrayList<>()).add(new int[]{to, cost});
+    }
+
+    // Dijkstra's algorithm implementation
+    public List findShortestPath(int start, int target) {
+        PriorityQueue pq = new PriorityQueue<>(Comparator.comparingInt(n -> n.cost));
+        Map visited = new HashMap<>(); // Tracks lowest cost per node
+
+        pq.offer(new Node(start, 0, null));
+        visited.put(start, 0);
+
+        while (!pq.isEmpty()) {
+            Node current = pq.poll();
+
+            // Early exit if target is reached
+            if (current.id == target) {
+                return reconstructPath(current);
+            }
+
+            // Skip if a better path already exists
+            if (current.cost > visited.getOrDefault(current.id, Integer.MAX_VALUE)) {
+                continue;
+            }
+
+            // Explore neighbors
+            for (int[] neighbor : graph.getOrDefault(current.id, Collections.emptyList())) {
+                int newCost = current.cost + neighbor[1];
+                if (!visited.containsKey(neighbor[0]) || newCost < visited.get(neighbor[0])) {
+                    visited.put(neighbor[0], newCost);
+                    pq.offer(new Node(neighbor[0], newCost, current));
+                }
+            }
+        }
+
+        return Collections.emptyList(); // No path exists
+    }
+
+    // Reconstruct path from target to start
+    private List reconstructPath(Node targetNode) {
+        LinkedList path = new LinkedList<>();
+        Node current = targetNode;
+        while (current != null) {
+            path.addFirst(current.id);
+            current = current.previous;
+        }
+        return path;
+    }
+
+    // Example usage for robotics path planning
+    public static void main(String[] args) {
+        DijkstraAlgorithm dijkstra = new DijkstraAlgorithm();
+        
+        // Building a sample graph (e.g., grid map with obstacles)
+        dijkstra.addEdge(0, 1, 1);  // Node 0 to Node 1 with cost 1
+        dijkstra.addEdge(1, 2, 2);  // Node 1 to Node 2 with cost 2
+        dijkstra.addEdge(2, 3, 1);  // Node 2 to Node 3 with cost 1
+        dijkstra.addEdge(0, 3, 5);  // Alternative longer path
+
+        List path = dijkstra.findShortestPath(0, 3);
+        System.out.println("Shortest path: " + path);  // Output: [0, 1, 2, 3]
+    }
+}
