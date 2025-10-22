@@ -1,0 +1,100 @@
+import org.ejml.simple.SimpleMatrix;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * A robust MPC implementation for robotics with constraints.
+ * Assumes a linear time-invariant (LTI) system model.
+ */
+public class RobustMPCController {
+    private SimpleMatrix A; // State transition matrix
+    private SimpleMatrix B; // Control input matrix
+    private SimpleMatrix Q; // State cost matrix
+    private SimpleMatrix R; // Control cost matrix
+    private int horizon;     // Prediction horizon
+    private double maxInput; // Maximum control input constraint
+
+    public RobustMPCController(SimpleMatrix A, SimpleMatrix B, 
+                              SimpleMatrix Q, SimpleMatrix R, 
+                              int horizon, double maxInput) {
+        this.A = A;
+        this.B = B;
+        this.Q = Q;
+        this.R = R;
+        this.horizon = horizon;
+        this.maxInput = maxInput;
+    }
+
+    /**
+     * Solves the constrained MPC problem with robustness considerations
+     * @param x0 Initial state
+     * @param xRef Reference trajectory (list of target states)
+     * @return Optimal control sequence
+     */
+    public List solveMPC(SimpleMatrix x0, List xRef) {
+        List controlSequence = new ArrayList<>();
+        
+        // Warm-start for faster convergence (optional)
+        SimpleMatrix uPrev = new SimpleMatrix(B.numCols(), 1);
+        
+        // MPC optimization loop
+        for (int k = 0; k < horizon; k++) {
+            // Get current reference (with bounds checking)
+            SimpleMatrix xTarget = (k < xRef.size()) ? xRef.get(k) : xRef.get(xRef.size() - 1);
+            
+            // Solve QP problem (simplified for illustration)
+            SimpleMatrix uOpt = solveQP(x0, xTarget, uPrev);
+            
+            // Apply input constraints
+            uOpt = constrainInput(uOpt);
+            
+            // Store optimal control
+            controlSequence.add(uOpt);
+            
+            // Update state prediction (with robustness consideration)
+            x0 = predictState(x0, uOpt);
+            
+            // Update warm-start
+            uPrev = uOpt;
+        }
+        
+        return controlSequence;
+    }
+
+    private SimpleMatrix solveQP(SimpleMatrix x, SimpleMatrix xRef, SimpleMatrix uPrev) {
+        // This would typically use a QP solver like EJML's or a dedicated library
+        // Simplified for illustration:
+        
+        // Cost function: J = (x-xRef)'Q(x-xRef) + u'Ru
+        SimpleMatrix Qp = Q.mult(x.minus(xRef));
+        SimpleMatrix Rp = R.mult(uPrev);
+        
+        // Solve for optimal control (pseudo-inverse for illustration)
+        SimpleMatrix K = B.transpose().mult(Q).mult(B).plus(R).pseudoInverse()
+                      .mult(B.transpose()).mult(Q);
+        
+        return K.mult(xRef.minus(A.mult(x)));
+    }
+
+    private SimpleMatrix constrainInput(SimpleMatrix u) {
+        // Apply saturation constraints
+        for (int i = 0; i < u.numRows(); i++) {
+            double val = u.get(i, 0);
+            u.set(i, 0, Math.max(-maxInput, Math.min(maxInput, val)));
+        }
+        return u;
+    }
+
+    private SimpleMatrix predictState(SimpleMatrix x, SimpleMatrix u) {
+        // Nominal state prediction with added robustness margin
+        SimpleMatrix xNext = A.mult(x).plus(B.mult(u));
+        
+        // Simple robustness: add small margin to prevent constraint violation
+        double robustnessMargin = 0.01; // Configurable
+        for (int i = 0; i < xNext.numRows(); i++) {
+            xNext.set(i, 0, xNext.get(i, 0) * (1 + robustnessMargin));
+        }
+        
+        return xNext;
+    }
+}
