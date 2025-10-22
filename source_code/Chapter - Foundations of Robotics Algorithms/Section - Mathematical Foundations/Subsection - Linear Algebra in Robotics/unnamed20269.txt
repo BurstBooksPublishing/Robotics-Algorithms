@@ -1,0 +1,69 @@
+import numpy as np
+from scipy.linalg import expm, logm
+
+class RobotKinematics:
+    """A class for handling linear algebra operations in robotics."""
+    
+    def __init__(self, joint_angles, link_lengths):
+        """Initialize with joint angles and link lengths."""
+        self.theta = np.array(joint_angles)
+        self.l = np.array(link_lengths)
+    
+    def rotation_matrix(self, axis, angle):
+        """Compute the 3x3 rotation matrix for a given axis and angle.
+        
+        Args:
+            axis (str): 'x', 'y', or 'z' axis of rotation.
+            angle (float): Rotation angle in radians.
+            
+        Returns:
+            np.ndarray: 3x3 rotation matrix.
+        """
+        if axis == 'x':
+            return np.array([
+                [1, 0, 0],
+                [0, np.cos(angle), -np.sin(angle)],
+                [0, np.sin(angle), np.cos(angle)]])
+        elif axis == 'y':
+            return np.array([
+                [np.cos(angle), 0, np.sin(angle)],
+                [0, 1, 0],
+                [-np.sin(angle), 0, np.cos(angle)]])
+        elif axis == 'z':
+            return np.array([
+                [np.cos(angle), -np.sin(angle), 0],
+                [np.sin(angle), np.cos(angle), 0],
+                [0, 0, 1]])
+        else:
+            raise ValueError("Axis must be 'x', 'y', or 'z'.")
+
+    def homogeneous_transform(self, axis, angle, displacement):
+        """Compute the 4x4 homogeneous transformation matrix.
+        
+        Args:
+            axis (str): Axis of rotation.
+            angle (float): Rotation angle in radians.
+            displacement (np.ndarray): 3D translation vector.
+            
+        Returns:
+            np.ndarray: 4x4 transformation matrix.
+        """
+        R = self.rotation_matrix(axis, angle)
+        T = np.eye(4)
+        T[:3, :3] = R
+        T[:3, 3] = displacement
+        return T
+
+    def forward_kinematics(self):
+        """Compute the forward kinematics transformation matrix.
+        
+        Returns:
+            np.ndarray: Final 4x4 transformation matrix.
+        """
+        T = np.eye(4)
+        for i in range(len(self.theta)):
+            angle = self.theta[i]
+            d = np.array([self.l[i], 0, 0])
+            Ti = self.homogeneous_transform('z', angle, d)
+            T = T @ Ti
+        return T
