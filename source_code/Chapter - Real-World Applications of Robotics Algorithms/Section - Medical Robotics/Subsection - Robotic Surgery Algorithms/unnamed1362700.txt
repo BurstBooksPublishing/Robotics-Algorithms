@@ -1,0 +1,108 @@
+/**
+ * Robotic Surgery Path Planning Algorithm
+ * Simulates trajectory optimization for minimally invasive surgery.
+ * Context: Chapter 12 - Real-World Applications of Robotics Algorithms
+ */
+import java.util.*;
+
+public class RoboticSurgeryPlanner {
+    private static final double SAFETY_MARGIN = 2.5; // mm clearance from vital structures
+    private static final int MAX_ITERATIONS = 1000;
+
+    // Represents 3D surgical space with obstacles
+    private static class SurgicalVolume {
+        double[][][] tissueDensityMap;
+        List criticalStructures;
+        
+        public SurgicalVolume(int x, int y, int z) {
+            tissueDensityMap = new double[x][y][z];
+            criticalStructures = new ArrayList<>();
+        }
+    }
+
+    // 3D point with utility methods
+    private static class Point {
+        double x, y, z;
+        
+        public Point(double x, double y, double z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+        
+        double distanceTo(Point other) {
+            return Math.sqrt(Math.pow(x-other.x, 2) + 
+                            Math.pow(y-other.y, 2) + 
+                            Math.pow(z-other.z, 2));
+        }
+    }
+
+    /**
+     * RRT* algorithm adapted for surgical path planning
+     * @param start Initial instrument position
+     * @param target Surgical target location
+     * @param volume 3D surgical environment
+     * @return Optimized path avoiding critical structures
+     */
+    public static List planSurgicalPath(Point start, Point target, SurgicalVolume volume) {
+        List path = new ArrayList<>();
+        Random rand = new Random();
+        path.add(start);
+        
+        for (int i = 0; i < MAX_ITERATIONS; i++) {
+            // Generate random point biased toward target (80% chance)
+            Point randomPoint = (rand.nextDouble() < 0.8) ? 
+                target : 
+                new Point(
+                    rand.nextDouble() * volume.tissueDensityMap.length,
+                    rand.nextDouble() * volume.tissueDensityMap[0].length,
+                    rand.nextDouble() * volume.tissueDensityMap[0][0].length
+                );
+            
+            // Find nearest node in current path
+            Point nearest = path.get(0);
+            for (Point p : path) {
+                if (p.distanceTo(randomPoint) < nearest.distanceTo(randomPoint)) {
+                    nearest = p;
+                }
+            }
+            
+            // Check safety constraints
+            if (isSafeTransition(nearest, randomPoint, volume)) {
+                path.add(randomPoint);
+                
+                // Early exit if close to target
+                if (randomPoint.distanceTo(target) < SAFETY_MARGIN * 2) {
+                    path.add(target);
+                    return optimizePath(path, volume);
+                }
+            }
+        }
+        return Collections.emptyList(); // No safe path found
+    }
+    
+    // Checks if path segment avoids critical structures
+    private static boolean isSafeTransition(Point from, Point to, SurgicalVolume volume) {
+        for (Point critical : volume.criticalStructures) {
+            double dist = distanceToLineSegment(critical, from, to);
+            if (dist < SAFETY_MARGIN) return false;
+        }
+        return true;
+    }
+    
+    // Calculates point-to-line-segment distance in 3D
+    private static double distanceToLineSegment(Point p, Point a, Point b) {
+        // Vector calculations omitted for brevity
+        // Implementation would use dot products and magnitude checks
+        return 0; // Placeholder for actual geometric calculation
+    }
+    
+    // Smooths path using gradient descent on tissue damage cost function
+    private static List optimizePath(List path, SurgicalVolume volume) {
+        // Implementation would minimize:
+        // 1. Total path length
+        // 2. Proximity to critical structures
+        // 3. Tissue damage (from density map)
+        return path; // Return optimized path
+    }
+}
