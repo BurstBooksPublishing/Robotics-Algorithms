@@ -1,0 +1,59 @@
+import cv2
+import numpy as np
+
+class RobotVision:
+    def __init__(self, camera_index=0):
+        """Initialize camera and parameters for robotic vision."""
+        self.cap = cv2.VideoCapture(camera_index)
+        self.detector = cv2.SimpleBlobDetector_create()  # For object detection
+        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)  # For marker detection
+        self.aruco_params = cv2.aruco.DetectorParameters()
+
+    def detect_objects(self, frame):
+        """Detect blobs (objects) using thresholding and contour analysis."""
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        _, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Filter contours by area and circularity
+        filtered_contours = []
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if 100 < area < 5000:  # Adjust based on expected object size
+                perimeter = cv2.arcLength(cnt, True)
+                circularity = 4 * np.pi * area / (perimeter ** 2) if perimeter > 0 else 0
+                if 0.7 < circularity < 1.3:  # Approximate circle
+                    filtered_contours.append(cnt)
+        return filtered_contours
+
+    def detect_aruco_markers(self, frame):
+        """Detect ArUco markers and return their IDs and corners."""
+        corners, ids, _ = cv2.aruco.detectMarkers(frame, self.aruco_dict, parameters=self.aruco_params)
+        return corners, ids
+
+    def run(self):
+        """Main loop for real-time robotic vision processing."""
+        while True:
+            ret, frame = self.cap.read()
+            if not ret:
+                break
+
+            # Object detection
+            contours = self.detect_objects(frame)
+            cv2.drawContours(frame, contours, -1, (0, 255, 0), 2)
+
+            # Marker detection
+            corners, ids = self.detect_aruco_markers(frame)
+            if ids is not None:
+                cv2.aruco.drawDetectedMarkers(frame, corners, ids)
+
+            cv2.imshow('Robot Vision', frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+        self.cap.release()
+        cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    robot_vision = RobotVision()
+    robot_vision.run()
