@@ -1,0 +1,80 @@
+import numpy as np
+from scipy.spatial import ConvexHull
+
+def compute_force_closure_quality(contact_points, normals, friction_coeff=0.5):
+    """
+    Compute the force closure quality metric for a grasp.
+    
+    Args:
+        contact_points (np.ndarray): Array of contact points (Nx3).
+        normals (np.ndarray): Array of contact normals (Nx3).
+        friction_coeff (float): Coefficient of friction.
+    
+    Returns:
+        float: Force closure quality score (higher is better).
+    """
+    # Convert contact points and normals to wrench space
+    wrenches = []
+    for p, n in zip(contact_points, normals):
+        # Friction cone approximation (4 edges)
+        for theta in np.linspace(0, 2*np.pi, 4, endpoint=False):
+            # Compute friction cone edge direction
+            t = np.array([-n[1], n[0], 0])  # Tangent direction
+            f = n + friction_coeff * (np.cos(theta)*t + np.sin(theta)*np.cross(n, t))
+            # Compute wrench [force; torque]
+            wrench = np.concatenate([f, np.cross(p, f)])
+            wrenches.append(wrench)
+    
+    wrenches = np.array(wrenches)
+    
+    # Check if origin is in convex hull of wrenches
+    hull = ConvexHull(wrenches)
+    return 1.0 / hull.distance  # Inverse distance as quality metric
+
+def compute_epsilon_quality(contact_points, object_center):
+    """
+    Compute the epsilon quality metric (measure of grasp isotropy).
+    
+    Args:
+        contact_points (np.ndarray): Array of contact points (Nx3).
+        object_center (np.ndarray): Center of mass of the object (3x1).
+    
+    Returns:
+        float: Epsilon quality score (0 to 1, higher is better).
+    """
+    # Compute vectors from center to contact points
+    vectors = contact_points - object_center
+    distances = np.linalg.norm(vectors, axis=1)
+    
+    # Normalize vectors to unit length
+    normalized_vectors = vectors / distances[:, np.newaxis]
+    
+    # Compute grasp matrix
+    G = np.zeros((6, 3*len(contact_points)))
+    for i, (v, d) in enumerate(zip(normalized_vectors, distances)):
+        G[:3, 3*i:3*i+3] = np.eye(3)
+        G[3:, 3*i:3*i+3] = np.cross(d, np.eye(3))
+    
+    # Compute singular values
+    _, s, _ = np.linalg.svd(G)
+    
+    # Epsilon quality is ratio of smallest to largest singular value
+    return s[-1] / s[0]
+
+def compute_robust_quality(contact_points, normals, object_center):
+    """
+    Combined grasp quality metric considering both force closure and isotropy.
+    
+    Args:
+        contact_points (np.ndarray): Array of contact points (Nx3).
+        normals (np.ndarray): Array of contact normals (Nx3).
+        object_center (np.ndarray): Center of mass of the object (3x1).
+    
+    Returns:
+        float: Combined quality score (higher is better).
+    """
+    fc_quality = compute_force_closure_quality(contact_points, normals)
+    eps_quality = compute_epsilon_quality(contact_points, object_center)
+    
+    # Weighted combination (adjust weights as needed)
+    return 0.7 * fc_quality + 0.3 * eps_quality
