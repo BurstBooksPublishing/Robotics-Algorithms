@@ -1,0 +1,65 @@
+import numpy as np
+import tensorflow as tf
+from sklearn.preprocessing import StandardScaler
+from tactile_sensor import TactileSensor  # Simulated tactile sensor interface
+
+class TactileObjectRecognizer:
+    def __init__(self, model_path=None):
+        """Initialize tactile recognition system with optional pre-trained model."""
+        self.scaler = StandardScaler()
+        if model_path:
+            self.model = tf.keras.models.load_model(model_path)
+        else:
+            self.model = self._build_default_model()
+        
+        self.sensor = TactileSensor()  # Initialize tactile sensor
+
+    def _build_default_model(self):
+        """Create a CNN model for tactile data classification."""
+        model = tf.keras.Sequential([
+            tf.keras.layers.Reshape((16, 16, 1), input_shape=(256,)),  # Tactile array
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+            tf.keras.layers.MaxPooling2D((2, 2)),
+            tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
+            tf.keras.layers.Flatten(),
+            tf.keras.layers.Dense(128, activation='relu'),
+            tf.keras.layers.Dense(10, activation='softmax')  # 10 object classes
+        ])
+        model.compile(optimizer='adam',
+                      loss='sparse_categorical_crossentropy',
+                      metrics=['accuracy'])
+        return model
+
+    def preprocess_tactile_data(self, raw_data):
+        """Normalize and reshape tactile sensor data."""
+        normalized = self.scaler.transform(raw_data.reshape(1, -1))
+        return normalized.flatten()
+
+    def recognize_object(self, contact_force=0.5):
+        """
+        Perform object recognition from tactile data during grasping.
+        
+        Args:
+            contact_force: Minimum force threshold for valid contact (N)
+        
+        Returns:
+            Predicted class and confidence scores
+        """
+        # Get tactile array data (16x16 pressure values)
+        tactile_data = self.sensor.read(force_threshold=contact_force)
+        
+        if tactile_data is None:
+            return None, 0.0
+            
+        # Preprocess and predict
+        processed_data = self.preprocess_tactile_data(tactile_data)
+        predictions = self.model.predict(np.array([processed_data]))
+        class_id = np.argmax(predictions)
+        confidence = np.max(predictions)
+        
+        return class_id, confidence
+
+    def online_learning(self, new_data, labels):
+        """Update model with new tactile data during operation."""
+        processed_data = self.scaler.transform(new_data)
+        self.model.fit(processed_data, labels, epochs=1, verbose=0)
