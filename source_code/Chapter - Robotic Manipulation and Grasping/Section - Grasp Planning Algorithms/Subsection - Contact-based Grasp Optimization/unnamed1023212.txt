@@ -1,0 +1,93 @@
+/**
+ * Contact-based Grasp Optimization for Robotics Manipulation
+ * Implements a gradient-descent approach to optimize grasp contacts
+ * based on force closure and stability metrics.
+ */
+public class ContactGraspOptimizer {
+    private static final double GRADIENT_STEP = 0.01;
+    private static final int MAX_ITERATIONS = 1000;
+    private static final double STABILITY_THRESHOLD = 0.95;
+
+    /**
+     * Optimizes grasp contacts using gradient descent
+     * @param initialContacts List of initial contact points on object surface
+     * @param objectMesh 3D mesh representation of the target object
+     * @return Optimized list of contact points
+     */
+    public List optimizeGrasp(List initialContacts, Mesh objectMesh) {
+        List currentContacts = new ArrayList<>(initialContacts);
+        double prevStability = computeStabilityMetric(currentContacts, objectMesh);
+        
+        for (int i = 0; i < MAX_ITERATIONS; i++) {
+            // Compute gradient for each contact point
+            List gradients = new ArrayList<>();
+            for (ContactPoint contact : currentContacts) {
+                gradients.add(computeContactGradient(contact, currentContacts, objectMesh));
+            }
+            
+            // Update contact positions along gradient direction
+            for (int j = 0; j < currentContacts.size(); j++) {
+                ContactPoint updated = currentContacts.get(j).moveAlongGradient(
+                    gradients.get(j).scale(GRADIENT_STEP));
+                currentContacts.set(j, updated);
+            }
+            
+            // Check stability improvement
+            double newStability = computeStabilityMetric(currentContacts, objectMesh);
+            if (newStability > STABILITY_THRESHOLD || 
+                Math.abs(newStability - prevStability) < 1e-6) {
+                break;
+            }
+            prevStability = newStability;
+        }
+        return currentContacts;
+    }
+
+    /**
+     * Computes stability metric (0-1) for current contact configuration
+     */
+    private double computeStabilityMetric(List contacts, Mesh objectMesh) {
+        // Implementation of force closure quality metric
+        // Combines wrench space analysis and friction cone constraints
+        double quality = 0.0;
+        // ... metric calculation logic ...
+        return Math.min(1.0, quality); // Clamp to [0,1] range
+    }
+
+    /**
+     * Computes gradient for a single contact point
+     */
+    private Vector3D computeContactGradient(ContactPoint contact, 
+                                          List allContacts, 
+                                          Mesh objectMesh) {
+        // Finite difference approach to estimate gradient
+        Vector3D gradient = new Vector3D();
+        double baseStability = computeLocalStability(contact, allContacts, objectMesh);
+        
+        for (int axis = 0; axis < 3; axis++) {
+            ContactPoint perturbed = contact.perturb(axis, 1e-5);
+            double perturbedStability = computeLocalStability(perturbed, allContacts, objectMesh);
+            gradient.set(axis, (perturbedStability - baseStability) / 1e-5);
+        }
+        return gradient.normalize();
+    }
+
+    // ... helper methods and classes ...
+}
+
+/**
+ * Represents a contact point on object surface with normal and friction properties
+ */
+class ContactPoint {
+    private Vector3D position;
+    private Vector3D normal;
+    private double frictionCoefficient;
+    
+    public ContactPoint moveAlongGradient(Vector3D gradient) {
+        // Projects gradient onto tangent plane (maintains surface contact)
+        Vector3D tangentMove = gradient.subtract(normal.scale(gradient.dot(normal)));
+        return new ContactPoint(position.add(tangentMove), normal, frictionCoefficient);
+    }
+    
+    // ... other methods ...
+}
