@@ -1,0 +1,74 @@
+/**
+ * Demonstrates motion primitives for robotic manipulation in cluttered environments.
+ * Implements basic primitives like linear push, spiral search, and retreat motion.
+ */
+public class MotionPrimitives {
+
+    // Linear push primitive: Moves end-effector in a straight line
+    public void linearPush(double[] startPos, double[] targetPos, double speed) {
+        // Calculate direction vector
+        double[] direction = new double[3];
+        for (int i = 0; i < 3; i++) {
+            direction[i] = targetPos[i] - startPos[i];
+        }
+        
+        // Normalize and execute motion
+        double norm = Math.sqrt(direction[0]*direction[0] + 
+                               direction[1]*direction[1] + 
+                               direction[2]*direction[2]);
+        for (int i = 0; i < 3; i++) {
+            direction[i] = (direction[i] / norm) * speed;
+        }
+        
+        // In real implementation: Send velocity commands to robot
+        System.out.println("Executing linear push with velocity: " + 
+                          Arrays.toString(direction));
+    }
+
+    // Spiral search primitive for object localization
+    public void spiralSearch(double[] center, double maxRadius, int rotations) {
+        double radiusStep = maxRadius / rotations;
+        double angle = 0;
+        double radius = 0;
+        
+        while (radius <= maxRadius) {
+            // Calculate spiral coordinates
+            double x = center[0] + radius * Math.cos(angle);
+            double y = center[1] + radius * Math.sin(angle);
+            
+            // In real implementation: Move to (x,y) while maintaining z-height
+            System.out.println("Spiral search at position: [" + x + ", " + y + "]");
+            
+            angle += 0.1;  // Angular increment
+            if (angle >= 2 * Math.PI) {
+                angle = 0;
+                radius += radiusStep;
+            }
+        }
+    }
+
+    // Safe retreat motion primitive
+    public void retreatMotion(double[] currentPos, double retreatDistance) {
+        // Simple vertical retreat
+        double[] retreatPos = currentPos.clone();
+        retreatPos[2] += retreatDistance;  // Move upward in z-axis
+        
+        // In real implementation: Execute collision-free motion
+        System.out.println("Executing retreat to safe position: " + 
+                          Arrays.toString(retreatPos));
+    }
+
+    public static void main(String[] args) {
+        MotionPrimitives mp = new MotionPrimitives();
+        
+        // Example usage
+        double[] start = {0.0, 0.0, 0.5};
+        double[] target = {0.3, 0.2, 0.5};
+        mp.linearPush(start, target, 0.1);
+        
+        double[] center = {0.5, 0.5, 0.5};
+        mp.spiralSearch(center, 0.2, 3);
+        
+        mp.retreatMotion(target, 0.15);
+    }
+}
