@@ -1,0 +1,112 @@
+import java.util.*;
+
+/**
+ * PRM (Probabilistic Roadmap) implementation for robotics motion planning.
+ * This class generates a roadmap by sampling random configurations and connecting them.
+ */
+public class ProbabilisticRoadmap {
+    private static class Node {
+        double x, y; // Coordinates of the node
+        List neighbors; // Connected neighbors
+
+        public Node(double x, double y) {
+            this.x = x;
+            this.y = y;
+            this.neighbors = new ArrayList<>();
+        }
+    }
+
+    private List nodes;
+    private Random random;
+    private double maxConnectionDistance;
+
+    public ProbabilisticRoadmap(int numNodes, double maxConnectionDistance) {
+        this.nodes = new ArrayList<>();
+        this.random = new Random();
+        this.maxConnectionDistance = maxConnectionDistance;
+
+        // Generate random nodes
+        for (int i = 0; i < numNodes; i++) {
+            nodes.add(new Node(random.nextDouble() * 100, random.nextDouble() * 100));
+        }
+
+        // Connect nearby nodes
+        for (Node node : nodes) {
+            for (Node other : nodes) {
+                if (node != other && distance(node, other) <= maxConnectionDistance) {
+                    node.neighbors.add(other);
+                }
+            }
+        }
+    }
+
+    private double distance(Node a, Node b) {
+        return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
+    }
+
+    /**
+     * Finds a path from start to goal using the PRM roadmap.
+     */
+    public List findPath(Node start, Node goal) {
+        // Add start and goal to the roadmap temporarily
+        nodes.add(start);
+        nodes.add(goal);
+        connectNode(start);
+        connectNode(goal);
+
+        // Use A* algorithm to find the path
+        Map gScore = new HashMap<>();
+        Map fScore = new HashMap<>();
+        Map cameFrom = new HashMap<>();
+        PriorityQueue openSet = new PriorityQueue<>(Comparator.comparingDouble(fScore::get));
+
+        for (Node node : nodes) {
+            gScore.put(node, Double.POSITIVE_INFINITY);
+            fScore.put(node, Double.POSITIVE_INFINITY);
+        }
+        gScore.put(start, 0.0);
+        fScore.put(start, distance(start, goal));
+        openSet.add(start);
+
+        while (!openSet.isEmpty()) {
+            Node current = openSet.poll();
+            if (current == goal) {
+                return reconstructPath(cameFrom, current);
+            }
+
+            for (Node neighbor : current.neighbors) {
+                double tentativeGScore = gScore.get(current) + distance(current, neighbor);
+                if (tentativeGScore < gScore.get(neighbor)) {
+                    cameFrom.put(neighbor, current);
+                    gScore.put(neighbor, tentativeGScore);
+                    fScore.put(neighbor, tentativeGScore + distance(neighbor, goal));
+                    if (!openSet.contains(neighbor)) {
+                        openSet.add(neighbor);
+                    }
+                }
+            }
+        }
+
+        return Collections.emptyList(); // No path found
+    }
+
+    private List reconstructPath(Map cameFrom, Node current) {
+        List path = new ArrayList<>();
+        path.add(current);
+        while (cameFrom.containsKey(current)) {
+            current = cameFrom.get(current);
+            path.add(current);
+        }
+        Collections.reverse(path);
+        return path;
+    }
+
+    private void connectNode(Node node) {
+        for (Node other : nodes) {
+            if (node != other && distance(node, other) <= maxConnectionDistance) {
+                node.neighbors.add(other);
+                other.neighbors.add(node);
+            }
+        }
+    }
+}
