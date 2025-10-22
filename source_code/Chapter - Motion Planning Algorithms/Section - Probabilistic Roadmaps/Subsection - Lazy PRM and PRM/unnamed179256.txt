@@ -1,0 +1,58 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.spatial import KDTree, distance
+
+class LazyPRM:
+    def __init__(self, bounds, num_samples=1000, k_neighbors=10):
+        self.bounds = bounds  # Workspace boundaries [x_min, x_max, y_min, y_max]
+        self.num_samples = num_samples
+        self.k_neighbors = k_neighbors
+        self.nodes = None
+        self.kd_tree = None
+        self.edges = {}
+
+    def sample_configuration_space(self):
+        """Randomly sample points in the configuration space."""
+        x = np.random.uniform(self.bounds[0], self.bounds[1], self.num_samples)
+        y = np.random.uniform(self.bounds[2], self.bounds[3], self.num_samples)
+        self.nodes = np.column_stack((x, y))
+        self.kd_tree = KDTree(self.nodes)
+
+    def build_roadmap(self):
+        """Build a lazy PRM roadmap (edges are not collision-checked initially)."""
+        for i, node in enumerate(self.nodes):
+            _, neighbors = self.kd_tree.query(node, k=self.k_neighbors + 1)  # +1 to exclude self
+            self.edges[i] = neighbors[1:]  # Store neighbor indices
+
+    def lazy_collision_check(self, start_idx, goal_idx):
+        """Check collisions only along the shortest path (simplified for demo)."""
+        path = self.find_shortest_path(start_idx, goal_idx)
+        # Placeholder for collision-checking logic
+        return path if path else None
+
+    def find_shortest_path(self, start_idx, goal_idx):
+        """Dijkstra's algorithm to find the shortest path (simplified)."""
+        # Placeholder for actual implementation
+        return [start_idx, goal_idx]
+
+class PRMStar(LazyPRM):
+    def __init__(self, bounds, num_samples=1000, radius=0.1):
+        super().__init__(bounds, num_samples)
+        self.radius = radius  # Connection radius for PRM*
+
+    def build_roadmap(self):
+        """Build a PRM* roadmap with radius-based connections."""
+        for i, node in enumerate(self.nodes):
+            neighbors = self.kd_tree.query_ball_point(node, self.radius)
+            self.edges[i] = [n for n in neighbors if n != i]  # Exclude self
+
+# Example usage
+if __name__ == "__main__":
+    bounds = [0, 10, 0, 10]  # Workspace bounds
+    lazy_prm = LazyPRM(bounds)
+    lazy_prm.sample_configuration_space()
+    lazy_prm.build_roadmap()
+
+    prm_star = PRMStar(bounds)
+    prm_star.sample_configuration_space()
+    prm_star.build_roadmap()
