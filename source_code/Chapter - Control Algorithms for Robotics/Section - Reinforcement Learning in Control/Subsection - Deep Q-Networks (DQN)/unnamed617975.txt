@@ -1,0 +1,88 @@
+import org.deeplearning4j.nn.api.OptimizationAlgorithm;
+import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
+import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
+import org.deeplearning4j.nn.conf.layers.DenseLayer;
+import org.deeplearning4j.nn.conf.layers.OutputLayer;
+import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
+import org.deeplearning4j.nn.weights.WeightInit;
+import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.learning.config.Adam;
+import org.nd4j.linalg.lossfunctions.LossFunctions;
+
+public class DQNRobotController {
+    private MultiLayerNetwork qNetwork;
+    private final double gamma = 0.99; // Discount factor
+    private final int batchSize = 32;
+    private final int numActions; // Robot action space size
+
+    public DQNRobotController(int stateSize, int numActions) {
+        this.numActions = numActions;
+        buildNetwork(stateSize, numActions);
+    }
+
+    private void buildNetwork(int stateSize, int numActions) {
+        MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
+            .seed(123)
+            .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
+            .updater(new Adam(0.001))
+            .list()
+            .layer(0, new DenseLayer.Builder()
+                .nIn(stateSize) // Input: robot state vector
+                .nOut(64)
+                .weightInit(WeightInit.XAVIER)
+                .activation(Activation.RELU)
+                .build())
+            .layer(1, new DenseLayer.Builder()
+                .nIn(64)
+                .nOut(64)
+                .weightInit(WeightInit.XAVIER)
+                .activation(Activation.RELU)
+                .build())
+            .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MSE)
+                .nIn(64)
+                .nOut(numActions) // Output: Q-values for each action
+                .weightInit(WeightInit.XAVIER)
+                .activation(Activation.IDENTITY)
+                .build())
+            .build();
+
+        qNetwork = new MultiLayerNetwork(conf);
+        qNetwork.init();
+    }
+
+    // Predict Q-values for given state
+    public INDArray predictQValues(INDArray state) {
+        return qNetwork.output(state);
+    }
+
+    // Train network using experience replay
+    public void train(INDArray states, INDArray actions, INDArray rewards, 
+                     INDArray nextStates, INDArray dones) {
+        // Calculate target Q-values
+        INDArray targetQ = rewards.dup();
+        INDArray nextQ = qNetwork.output(nextStates);
+        INDArray maxNextQ = nextQ.max(1);
+        
+        // Apply Bellman equation
+        for (int i = 0; i < batchSize; i++) {
+            if (dones.getDouble(i) == 0) { // If not terminal state
+                double updatedQ = rewards.getDouble(i) + gamma * maxNextQ.getDouble(i);
+                targetQ.putScalar(i, updatedQ);
+            }
+        }
+
+        // Train network
+        qNetwork.fit(states, targetQ);
+    }
+
+    // Select action using epsilon-greedy policy
+    public int selectAction(INDArray state, double epsilon) {
+        if (Math.random() < epsilon) {
+            return (int)(Math.random() * numActions); // Random action
+        } else {
+            return predictQValues(state).argMax(1).getInt(0); // Best action
+        }
+    }
+}
