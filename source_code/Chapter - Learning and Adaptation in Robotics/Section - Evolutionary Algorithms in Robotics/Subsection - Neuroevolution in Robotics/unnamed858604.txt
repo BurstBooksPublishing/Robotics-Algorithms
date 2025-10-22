@@ -1,0 +1,151 @@
+// Neuroevolution for robotic control using NEAT (NeuroEvolution of Augmenting Topologies)
+import java.util.ArrayList;
+import java.util.Random;
+
+public class NeuroevolutionRobotController {
+    private static final int POPULATION_SIZE = 100;
+    private static final double MUTATION_RATE = 0.2;
+    private static final double CROSSOVER_RATE = 0.7;
+    
+    // Neural network structure for robotic control
+    static class NeuralNetwork {
+        ArrayList weights;
+        ArrayList biases;
+        
+        public NeuralNetwork(int inputSize, int outputSize) {
+            this.weights = new ArrayList<>();
+            this.biases = new ArrayList<>();
+            Random rand = new Random();
+            
+            // Initialize random weights and biases
+            for (int i = 0; i < inputSize * outputSize; i++) {
+                weights.add(rand.nextDouble() * 2 - 1); // Range: -1 to 1
+            }
+            for (int i = 0; i < outputSize; i++) {
+                biases.add(rand.nextDouble() * 2 - 1);
+            }
+        }
+        
+        // Feedforward computation for robot control signals
+        public ArrayList computeOutputs(ArrayList inputs) {
+            ArrayList outputs = new ArrayList<>();
+            int outputSize = biases.size();
+            
+            for (int i = 0; i < outputSize; i++) {
+                double sum = biases.get(i);
+                for (int j = 0; j < inputs.size(); j++) {
+                    sum += inputs.get(j) * weights.get(i * inputs.size() + j);
+                }
+                outputs.add(sigmoid(sum)); // Activation function
+            }
+            return outputs;
+        }
+        
+        private double sigmoid(double x) {
+            return 1 / (1 + Math.exp(-x));
+        }
+    }
+    
+    // Individual in the evolutionary population
+    static class Genome implements Comparable {
+        NeuralNetwork brain;
+        double fitness;
+        
+        public Genome(int inputSize, int outputSize) {
+            this.brain = new NeuralNetwork(inputSize, outputSize);
+            this.fitness = 0;
+        }
+        
+        @Override
+        public int compareTo(Genome other) {
+            return Double.compare(other.fitness, this.fitness); // Descending order
+        }
+    }
+    
+    // Evolutionary algorithm implementation
+    public static void main(String[] args) {
+        ArrayList population = new ArrayList<>();
+        Random rand = new Random();
+        
+        // Initialize population
+        for (int i = 0; i < POPULATION_SIZE; i++) {
+            population.add(new Genome(5, 2)); // 5 sensors, 2 motor outputs
+        }
+        
+        // Evolution loop
+        for (int generation = 0; generation < 100; generation++) {
+            // Evaluate fitness (simulate robot performance)
+            for (Genome g : population) {
+                // This would be replaced with actual robot simulation
+                g.fitness = rand.nextDouble(); // Placeholder for actual fitness evaluation
+            }
+            
+            // Selection and reproduction
+            population.sort(null);
+            ArrayList newPopulation = new ArrayList<>();
+            
+            // Keep top performers (elitism)
+            for (int i = 0; i < POPULATION_SIZE / 10; i++) {
+                newPopulation.add(population.get(i));
+            }
+            
+            // Breed new individuals
+            while (newPopulation.size() < POPULATION_SIZE) {
+                Genome parent1 = selectParent(population);
+                Genome parent2 = selectParent(population);
+                
+                Genome child = crossover(parent1, parent2);
+                mutate(child);
+                newPopulation.add(child);
+            }
+            
+            population = newPopulation;
+            System.out.println("Generation " + generation + " best fitness: " + population.get(0).fitness);
+        }
+    }
+    
+    // Tournament selection
+    private static Genome selectParent(ArrayList population) {
+        Random rand = new Random();
+        Genome best = population.get(rand.nextInt(population.size()));
+        
+        for (int i = 1; i < 3; i++) { // Tournament size of 3
+            Genome contender = population.get(rand.nextInt(population.size()));
+            if (contender.fitness > best.fitness) {
+                best = contender;
+            }
+        }
+        return best;
+    }
+    
+    // Single-point crossover
+    private static Genome crossover(Genome a, Genome b) {
+        Genome child = new Genome(5, 2);
+        Random rand = new Random();
+        
+        if (rand.nextDouble() < CROSSOVER_RATE) {
+            int crossoverPoint = rand.nextInt(a.brain.weights.size());
+            
+            for (int i = 0; i < a.brain.weights.size(); i++) {
+                if (i < crossoverPoint) {
+                    child.brain.weights.set(i, a.brain.weights.get(i));
+                } else {
+                    child.brain.weights.set(i, b.brain.weights.get(i));
+                }
+            }
+        }
+        return child;
+    }
+    
+    // Gaussian mutation
+    private static void mutate(Genome g) {
+        Random rand = new Random();
+        
+        for (int i = 0; i < g.brain.weights.size(); i++) {
+            if (rand.nextDouble() < MUTATION_RATE) {
+                double newWeight = g.brain.weights.get(i) + rand.nextGaussian() * 0.1;
+                g.brain.weights.set(i, Math.max(-1, Math.min(1, newWeight)));
+            }
+        }
+    }
+}
