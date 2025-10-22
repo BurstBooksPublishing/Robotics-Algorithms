@@ -1,0 +1,82 @@
+import org.opencv.core.*;
+import org.opencv.video.Video;
+import org.opencv.highgui.HighGui;
+import org.opencv.imgproc.Imgproc;
+
+/**
+ * Advanced Optical Flow implementation using Farneback method for Robotics.
+ * Part of Robot Perception in Chapter 3: Computer Vision for Robotics.
+ */
+public class OpticalFlowFarneback {
+
+    public static void main(String[] args) {
+        // Load OpenCV native library
+        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+
+        // Initialize video capture from robot's camera
+        VideoCapture cap = new VideoCapture(0);
+        if (!cap.isOpened()) {
+            System.err.println("Error: Unable to open camera feed.");
+            return;
+        }
+
+        Mat prevFrame = new Mat();
+        Mat nextFrame = new Mat();
+        Mat flow = new Mat();  // Stores the computed flow vectors
+        Mat flowDisplay = new Mat();  // For visualization
+
+        // Capture first frame
+        cap.read(prevFrame);
+        Imgproc.cvtColor(prevFrame, prevFrame, Imgproc.COLOR_BGR2GRAY);
+
+        while (true) {
+            // Capture next frame
+            if (!cap.read(nextFrame)) break;
+            Imgproc.cvtColor(nextFrame, nextFrame, Imgproc.COLOR_BGR2GRAY);
+
+            // Compute dense optical flow using Farneback method
+            Video.calcOpticalFlowFarneback(
+                prevFrame, nextFrame, flow,
+                0.5,  // pyramid scale
+                3,    // levels in pyramid
+                15,   // window size
+                3,    // iterations
+                5,    // polynomial degree
+                1.2,  // standard deviation
+                0     // flags
+            );
+
+            // Visualize the flow (convert to RGB for display)
+            flowDisplay.create(prevFrame.size(), CvType.CV_8UC3);
+            drawOpticalFlow(flow, flowDisplay);
+
+            // Display results
+            HighGui.imshow("Optical Flow", flowDisplay);
+            if (HighGui.waitKey(30) >= 0) break;
+
+            // Update previous frame
+            nextFrame.copyTo(prevFrame);
+        }
+
+        cap.release();
+        HighGui.destroyAllWindows();
+    }
+
+    /**
+     * Helper method to visualize optical flow vectors
+     */
+    private static void drawOpticalFlow(Mat flow, Mat flowDisplay) {
+        // Convert flow matrix to RGB representation
+        for (int y = 0; y < flow.rows(); y += 10) {
+            for (int x = 0; x < flow.cols(); x += 10) {
+                Point flowVec = flow.get(y, x);
+                Point start = new Point(x, y);
+                Point end = new Point(x + flowVec.x, y + flowVec.y);
+                
+                // Draw flow vector
+                Imgproc.line(flowDisplay, start, end, new Scalar(0, 255, 0), 1);
+                Imgproc.circle(flowDisplay, start, 1, new Scalar(0, 0, 255), -1);
+            }
+        }
+    }
+}
