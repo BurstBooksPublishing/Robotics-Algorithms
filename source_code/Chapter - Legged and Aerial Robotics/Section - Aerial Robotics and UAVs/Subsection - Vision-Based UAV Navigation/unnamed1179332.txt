@@ -1,0 +1,84 @@
+import org.opencv.core.*;
+import org.opencv.imgproc.Imgproc;
+import org.opencv.videoio.VideoCapture;
+
+/**
+ * Vision-based navigation for UAVs using OpenCV for obstacle detection and path planning.
+ * Assumes downward-facing camera for terrain analysis and obstacle avoidance.
+ */
+public class VisionBasedUAVNavigation {
+    private VideoCapture camera;
+    private Mat currentFrame;
+    private Mat processedFrame;
+    private Mat obstacleMask;
+
+    // Thresholds for obstacle detection (HSV color space)
+    private static final Scalar LOWER_OBSTACLE_THRESH = new Scalar(0, 50, 50);
+    private static final Scalar UPPER_OBSTACLE_THRESH = new Scalar(180, 255, 255);
+
+    public VisionBasedUAVNavigation() {
+        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+        camera = new VideoCapture(0); // Initialize camera
+        currentFrame = new Mat();
+        processedFrame = new Mat();
+        obstacleMask = new Mat();
+    }
+
+    /**
+     * Main navigation loop for UAV vision processing
+     */
+    public void runNavigation() {
+        while (true) {
+            if (camera.read(currentFrame)) {
+                // Preprocess frame (Gaussian blur + HSV conversion)
+                Imgproc.GaussianBlur(currentFrame, processedFrame, new Size(5, 5), 0);
+                Imgproc.cvtColor(processedFrame, processedFrame, Imgproc.COLOR_BGR2HSV);
+
+                // Detect obstacles using color thresholding
+                Core.inRange(processedFrame, LOWER_OBSTACLE_THRESH, UPPER_OBSTACLE_THRESH, obstacleMask);
+
+                // Find contours of detected obstacles
+                Mat hierarchy = new Mat();
+                List contours = new ArrayList<>();
+                Imgproc.findContours(obstacleMask, contours, hierarchy, 
+                                    Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+
+                // Calculate safe navigation path (simplified centroid avoidance)
+                Point frameCenter = new Point(currentFrame.width()/2, currentFrame.height()/2);
+                Point avoidanceVector = calculateAvoidanceVector(contours, frameCenter);
+
+                // TODO: Implement UAV control commands based on avoidanceVector
+            }
+        }
+    }
+
+    /**
+     * Calculates avoidance vector from detected obstacles
+     */
+    private Point calculateAvoidanceVector(List contours, Point center) {
+        Point resultantVector = new Point(0, 0);
+        for (MatOfPoint contour : contours) {
+            Rect boundRect = Imgproc.boundingRect(contour);
+            Point obstacleCenter = new Point(boundRect.x + boundRect.width/2, 
+                                           boundRect.y + boundRect.height/2);
+            
+            // Create repulsion vector (away from obstacle)
+            Point direction = new Point(center.x - obstacleCenter.x, 
+                                      center.y - obstacleCenter.y);
+            double distance = Math.sqrt(direction.x*direction.x + direction.y*direction.y);
+            
+            // Weight by inverse square distance (stronger repulsion when closer)
+            if (distance > 0) {
+                double weight = 1.0 / (distance * distance);
+                resultantVector.x += direction.x * weight;
+                resultantVector.y += direction.y * weight;
+            }
+        }
+        return resultantVector;
+    }
+
+    public static void main(String[] args) {
+        VisionBasedUAVNavigation navigator = new VisionBasedUAVNavigation();
+        navigator.runNavigation();
+    }
+}
