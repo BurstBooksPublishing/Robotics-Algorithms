@@ -1,0 +1,69 @@
+import org.ejml.simple.SimpleMatrix;
+
+/**
+ * Receding Horizon Control (RHC) implementation for robotics.
+ * Assumes a linear time-invariant system with quadratic cost.
+ */
+public class RecedingHorizonControl {
+    private SimpleMatrix A; // State transition matrix
+    private SimpleMatrix B; // Control input matrix
+    private SimpleMatrix Q; // State cost matrix
+    private SimpleMatrix R; // Control cost matrix
+    private int horizon;    // Prediction horizon length
+
+    public RecedingHorizonControl(SimpleMatrix A, SimpleMatrix B, 
+                                 SimpleMatrix Q, SimpleMatrix R, int horizon) {
+        this.A = A;
+        this.B = B;
+        this.Q = Q;
+        this.R = R;
+        this.horizon = horizon;
+    }
+
+    /**
+     * Computes optimal control sequence using RHC.
+     * @param x0 Initial state vector
+     * @return Optimal control input for first step
+     */
+    public SimpleMatrix computeControl(SimpleMatrix x0) {
+        // Initialize matrices for quadratic programming problem
+        SimpleMatrix H = new SimpleMatrix(horizon * B.numCols(), horizon * B.numCols());
+        SimpleMatrix f = new SimpleMatrix(horizon * B.numCols(), 1);
+        
+        // Build prediction matrices
+        SimpleMatrix P = buildPredictionMatrix();
+        SimpleMatrix Qbar = buildBlockDiagonal(Q, horizon);
+        SimpleMatrix Rbar = buildBlockDiagonal(R, horizon);
+        
+        // Construct quadratic cost terms
+        H = P.transpose().mult(Qbar).mult(P).plus(Rbar);
+        f = P.transpose().mult(Qbar).mult(buildStatePrediction(x0)).transpose();
+        
+        // Solve QP problem (simplified - in practice use a QP solver)
+        SimpleMatrix U = H.invert().mult(f.scale(-1));
+        
+        // Return first control input (Receding Horizon principle)
+        return U.extractMatrix(0, B.numCols(), 0, 1);
+    }
+
+    private SimpleMatrix buildPredictionMatrix() {
+        // Implementation of prediction matrix construction
+        // (Omitted for brevity - would contain A/B powers)
+        return new SimpleMatrix(horizon * A.numRows(), horizon * B.numCols());
+    }
+
+    private SimpleMatrix buildStatePrediction(SimpleMatrix x0) {
+        // Implementation of state prediction vector
+        // (Omitted for brevity - would contain A powers)
+        return new SimpleMatrix(horizon * A.numRows(), 1);
+    }
+
+    private SimpleMatrix buildBlockDiagonal(SimpleMatrix M, int n) {
+        // Creates block diagonal matrix with n copies of M
+        SimpleMatrix result = new SimpleMatrix(M.numRows() * n, M.numCols() * n);
+        for (int i = 0; i < n; i++) {
+            result.insertIntoThis(i * M.numRows(), i * M.numCols(), M);
+        }
+        return result;
+    }
+}
