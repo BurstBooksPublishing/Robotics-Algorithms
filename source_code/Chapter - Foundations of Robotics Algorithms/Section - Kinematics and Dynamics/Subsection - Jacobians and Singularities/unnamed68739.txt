@@ -1,0 +1,89 @@
+/**
+ * Robotics Algorithms - Chapter 1: Foundations of Robotics Algorithms
+ * Section: Kinematics and Dynamics
+ * Topic: Jacobians and Singularities
+ * 
+ * This class computes the Jacobian matrix and detects singularities
+ * for a 3-DOF robotic arm using the Denavit-Hartenberg (DH) parameters.
+ */
+public class JacobianAndSingularity {
+
+    // DH parameters for a 3-DOF robotic arm (theta, d, a, alpha)
+    private double[][] dhParams = {
+        {0, 0.5, 0, Math.PI/2},  // Joint 1
+        {0, 0, 1.0, 0},          // Joint 2
+        {0, 0, 0.7, 0}           // Joint 3
+    };
+
+    /**
+     * Computes the Jacobian matrix for the current joint angles.
+     * @param jointAngles Array of joint angles in radians.
+     * @return 6x3 Jacobian matrix (linear and angular velocities).
+     */
+    public double[][] computeJacobian(double[] jointAngles) {
+        if (jointAngles.length != 3) {
+            throw new IllegalArgumentException("3 joint angles required");
+        }
+
+        double[][] jacobian = new double[6][3];
+        double[][] transforms = new double[4][4];  // Homogeneous transforms
+
+        // Compute forward kinematics and Jacobian columns
+        for (int i = 0; i < 3; i++) {
+            // Update DH parameter theta with current joint angle
+            dhParams[i][0] = jointAngles[i];
+
+            // Compute homogeneous transform for this joint
+            transforms[i] = computeDHTranform(dhParams[i]);
+
+            // Jacobian column: linear and angular velocity components
+            if (i == 0) {
+                // First joint: rotation about Z0
+                jacobian[0][i] = 0;
+                jacobian[1][i] = 0;
+                jacobian[2][i] = 0;
+                jacobian[3][i] = 0;
+                jacobian[4][i] = 0;
+                jacobian[5][i] = 1;
+            } else {
+                // Subsequent joints: cross product (z_{i-1} x (o_n - o_{i-1}))
+                double[] zAxis = {transforms[i-1][0][2], transforms[i-1][1][2], transforms[i-1][2][2]};
+                double[] positionDiff = computePositionDifference(transforms[i], transforms[i-1]);
+
+                // Linear velocity part
+                jacobian[0][i] = zAxis[1] * positionDiff[2] - zAxis[2] * positionDiff[1];
+                jacobian[1][i] = zAxis[2] * positionDiff[0] - zAxis[0] * positionDiff[2];
+                jacobian[2][i] = zAxis[0] * positionDiff[1] - zAxis[1] * positionDiff[0];
+
+                // Angular velocity part
+                jacobian[3][i] = zAxis[0];
+                jacobian[4][i] = zAxis[1];
+                jacobian[5][i] = zAxis[2];
+            }
+        }
+
+        return jacobian;
+    }
+
+    /**
+     * Checks for kinematic singularities by examining the Jacobian determinant.
+     * @param jacobian The 6x3 Jacobian matrix.
+     * @return True if the arm is in a singular configuration.
+     */
+    public boolean isSingular(double[][] jacobian) {
+        // For redundant manipulators, we check the manipulability measure
+        double[][] jacobianSub = new double[3][3];  // Use only linear velocity part
+        for (int i = 0; i < 3; i++) {
+            System.arraycopy(jacobian[i], 0, jacobianSub[i], 0, 3);
+        }
+
+        // Compute determinant (for square matrix) or manipulability measure
+        double det = computeDeterminant(jacobianSub);
+        return Math.abs(det) < 1e-6;  // Threshold for singularity
+    }
+
+    // Helper methods (implementations omitted for brevity)
+    private double[] computePositionDifference(double[][] t1, double[][] t2) { /* ... */ }
+    private double[][] computeDHTranform(double[] dhRow) { /* ... */ }
+    private double computeDeterminant(double[][] matrix) { /* ... */ }
+}
