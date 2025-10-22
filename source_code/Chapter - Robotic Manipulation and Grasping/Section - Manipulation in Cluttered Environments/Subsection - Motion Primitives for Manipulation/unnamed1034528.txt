@@ -1,0 +1,64 @@
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+
+class MotionPrimitives:
+    """A collection of motion primitives for robotic manipulation in cluttered environments."""
+    
+    def __init__(self, robot_arm):
+        self.arm = robot_arm  # Reference to the robot arm controller
+    
+    def linear_push(self, start_pose, end_pose, speed=0.1):
+        """
+        Executes a linear push motion from start_pose to end_pose.
+        
+        Args:
+            start_pose (np.array): [x, y, z, roll, pitch, yaw] starting pose
+            end_pose (np.array): [x, y, z, roll, pitch, yaw] target pose
+            speed (float): normalized speed (0-1)
+        """
+        # Interpolate linearly in task space
+        waypoints = np.linspace(start_pose[:3], end_pose[:3], num=10)
+        for point in waypoints:
+            target_pose = np.concatenate([point, start_pose[3:]])
+            self.arm.move_to_pose(target_pose, speed=speed)
+    
+    def guarded_move(self, approach_pose, contact_force_threshold=5.0):
+        """
+        Performs a guarded move until contact is detected.
+        
+        Args:
+            approach_pose (np.array): [x, y, z, roll, pitch, yaw] approach pose
+            contact_force_threshold (float): force threshold (N) to detect contact
+        """
+        current_pose = self.arm.get_current_pose()
+        direction = (approach_pose[:3] - current_pose[:3])
+        direction = direction / np.linalg.norm(direction)
+        
+        while True:
+            # Move small increment toward target
+            new_pose = current_pose[:3] + 0.001 * direction
+            self.arm.move_to_pose(np.concatenate([new_pose, approach_pose[3:]]), speed=0.05)
+            
+            # Check for contact
+            if self.arm.get_contact_force() > contact_force_threshold:
+                break
+            current_pose = new_pose
+    
+    def spiral_search(self, center_pose, radius=0.05, revolutions=3):
+        """
+        Performs a spiral search pattern around center_pose.
+        
+        Args:
+            center_pose (np.array): [x, y, z, roll, pitch, yaw] center pose
+            radius (float): maximum spiral radius (m)
+            revolutions (int): number of full revolutions
+        """
+        z = center_pose[2]  # Maintain constant height
+        steps = 50 * revolutions  # Resolution of the spiral
+        
+        for i in range(steps):
+            theta = 2 * np.pi * revolutions * i / steps
+            r = radius * i / steps
+            x = center_pose[0] + r * np.cos(theta)
+            y = center_pose[1] + r * np.sin(theta)
+            self.arm.move_to_pose(np.array([x, y, z, *center_pose[3:]]), speed=0.1)
