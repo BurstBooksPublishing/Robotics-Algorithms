@@ -1,0 +1,112 @@
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+
+class RobotManipulator:
+    """A class to model a robotic manipulator's degrees of freedom (DoF)."""
+    
+    def __init__(self, num_joints, joint_types):
+        """
+        Initialize the robot manipulator with joint configurations.
+        
+        Args:
+            num_joints (int): Number of joints (DoF).
+            joint_types (list[str]): List of joint types ('revolute' or 'prismatic').
+        """
+        self.num_joints = num_joints
+        self.joint_types = joint_types
+        self.joint_limits = [(-np.pi, np.pi) if j == 'revolute' else (0, 1) for j in joint_types]
+        
+    def forward_kinematics(self, joint_angles):
+        """
+        Compute the end-effector pose using forward kinematics.
+        
+        Args:
+            joint_angles (list[float]): Joint angles or displacements.
+            
+        Returns:
+            np.ndarray: 4x4 homogeneous transformation matrix.
+        """
+        assert len(joint_angles) == self.num_joints, "Mismatched joint angles and DoF"
+        
+        # Start with identity matrix
+        T = np.eye(4)
+        
+        # Simplified DH parameters (for illustration)
+        a = [1.0] * self.num_joints  # Link lengths
+        d = [0.0] * self.num_joints  # Link offsets
+        
+        for i in range(self.num_joints):
+            theta = joint_angles[i] if self.joint_types[i] == 'revolute' else 0
+            di = joint_angles[i] if self.joint_types[i] == 'prismatic' else d[i]
+            
+            # Homogeneous transformation for current joint
+            Ti = np.array([
+
+\begin{lstlisting}
+/**
+ * This class demonstrates Degrees of Freedom (DoF) in robotics,
+ * specifically for a robotic arm with 6 DoF (common in industrial robots).
+ * It simulates basic forward kinematics for a 6-DoF arm.
+ */
+public class RobotArmDoF {
+    // Joint angles (in radians) for each of the 6 DoF
+    private double[] jointAngles = new double[6];
+
+    /**
+     * Constructor initializes joint angles to default (zero) positions.
+     */
+    public RobotArmDoF() {
+        for (int i = 0; i < 6; i++) {
+            jointAngles[i] = 0.0;
+        }
+    }
+
+    /**
+     * Sets the joint angle for a specific DoF.
+     * @param dofIndex Index of the DoF (0 to 5)
+     * @param angle Angle in radians
+     */
+    public void setJointAngle(int dofIndex, double angle) {
+        if (dofIndex >= 0 && dofIndex < 6) {
+            jointAngles[dofIndex] = angle;
+        }
+    }
+
+    /**
+     * Computes end effector position using forward kinematics.
+     * Simplified version assuming unit link lengths.
+     * @return 3D position as [x, y, z]
+     */
+    public double[] computeEndEffectorPosition() {
+        // Simplified forward kinematics for 6-DoF arm
+        double x = Math.cos(jointAngles[0]) * (Math.cos(jointAngles[1]) + 
+                 Math.cos(jointAngles[1] + jointAngles[2]) + 
+                 Math.cos(jointAngles[1] + jointAngles[2] + jointAngles[3]));
+        
+        double y = Math.sin(jointAngles[0]) * (Math.cos(jointAngles[1]) + 
+                 Math.cos(jointAngles[1] + jointAngles[2]) + 
+                 Math.cos(jointAngles[1] + jointAngles[2] + jointAngles[3]));
+        
+        double z = Math.sin(jointAngles[1]) + Math.sin(jointAngles[1] + jointAngles[2]) + 
+                 Math.sin(jointAngles[1] + jointAngles[2] + jointAngles[3]);
+        
+        return new double[]{x, y, z};
+    }
+
+    /**
+     * Checks if current configuration is within joint limits.
+     * @return true if all joints are within limits
+     */
+    public boolean checkJointLimits() {
+        // Simplified joint limits (in radians)
+        double[] minLimits = {-Math.PI/2, -Math.PI/2, -Math.PI/2, -Math.PI, -Math.PI, -Math.PI};
+        double[] maxLimits = {Math.PI/2, Math.PI/2, Math.PI/2, Math.PI, Math.PI, Math.PI};
+        
+        for (int i = 0; i < 6; i++) {
+            if (jointAngles[i] < minLimits[i] || jointAngles[i] > maxLimits[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
