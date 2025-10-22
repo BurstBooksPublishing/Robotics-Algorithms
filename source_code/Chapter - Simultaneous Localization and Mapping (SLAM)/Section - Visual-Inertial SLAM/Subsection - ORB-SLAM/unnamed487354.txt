@@ -1,0 +1,114 @@
+import numpy as np
+import cv2
+import pyorbital
+from threading import Thread
+from queue import Queue
+
+class ORBSLAM:
+    def __init__(self, cam_calib_path, orb_params=None):
+        """
+        Initialize ORB-SLAM with camera calibration and ORB feature parameters.
+        
+        Args:
+            cam_calib_path (str): Path to camera calibration file (YAML/XML)
+            orb_params (dict): Optional ORB feature detector parameters
+        """
+        # Load camera intrinsics and distortion coefficients
+        self.cam_matrix, self.dist_coeffs = self._load_calibration(cam_calib_path)
+        
+        # Initialize ORB feature detector
+        self.orb = cv2.ORB_create(
+            nfeatures=orb_params.get('nfeatures', 1000) if orb_params else 1000,
+            scaleFactor=orb_params.get('scaleFactor', 1.2) if orb_params else 1.2,
+            nlevels=orb_params.get('nlevels', 8) if orb_params else 8
+        )
+        
+        # Initialize SLAM components
+        self.map_points = []
+        self.keyframes = []
+        self.current_pose = np.eye(4)  # Identity matrix as initial pose
+        self.frame_queue = Queue(maxsize=10)
+        self.tracking_thread = Thread(target=self._tracking_loop, daemon=True)
+        self.tracking_thread.start()
+
+    def _load_calibration(self, path):
+        """Load camera calibration from file."""
+        fs = cv2.FileStorage(path, cv2.FILE_STORAGE_READ)
+        cam_matrix = fs.getNode("camera_matrix").mat()
+        dist_coeffs = fs.getNode("distortion_coefficients").mat()
+        fs.release()
+        return cam_matrix, dist_coeffs
+
+    def process_frame(self, frame):
+        """
+        Process a new frame for SLAM.
+        
+        Args:
+            frame (np.ndarray): Input image frame (grayscale)
+        """
+        if not self.frame_queue.full():
+            self.frame_queue.put(frame)
+
+    def _tracking_loop(self):
+        """Main tracking thread for continuous pose estimation."""
+        while True:
+            frame = self.frame_queue.get()
+            
+            # Feature extraction
+            kp, des = self.orb.detectAndCompute(frame, None)
+            
+            if len(self.keyframes) > 0:
+                # Feature matching with previous keyframe
+                last_kf = self.keyframes[-1]
+                matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+                matches = matcher.match(des, last_kf['descriptors'])
+                
+                # Pose estimation using PnP
+                if len(matches) > 20:
+                    src_pts = np.float32([kp[m.queryIdx].pt for m in matches]).reshape(-1,1,2)
+                    dst_pts = np.float32([last_kf['keypoints'][m.trainIdx].pt for m in matches]).reshape(-1,1,2)
+                    
+                    # Estimate camera pose using RANSAC
+                    _, rvec, tvec, inliers = cv2.solvePnPRansac(
+                        dst_pts, src_pts, self.cam_matrix, self.dist_coeffs
+                    )
+                    
+                    # Update current pose
+                    if inliers is not None and len(inliers) > 10:
+                        R, _ = cv2.Rodrigues(rvec)
+                        self.current_pose[:3, :3] = R
+                        self.current_pose[:3, 3] = tvec.flatten()
+            
+            # Keyframe decision
+            if len(self.keyframes) == 0 or self._needs_new_keyframe(kp):
+                self.keyframes.append({
+                    'keypoints': kp,
+                    'descriptors': des,
+                    'pose': self.current_pose.copy()
+                })
+                self._update_map(kp)
+
+    def _needs_new_keyframe(self, new_kp):
+        """Determine if a new keyframe should be created."""
+        if len(self.keyframes) == 0:
+            return True
+        
+        # Simple heuristic: add keyframe if tracking quality drops
+        last_kf = self.keyframes[-1]
+        matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
+        matches = matcher.knnMatch(last_kf['descriptors'], new_kp.descriptors, k=2)
+        
+        # Lowe's ratio test
+        good_matches = [m for m, n in matches if m.distance < 0.75 * n.distance]
+        return len(good_matches) < 50
+
+    def _update_map(self, new_kp):
+        """Update 3D map with new observations."""
+        # Placeholder for actual map update logic
+        # In a full implementation, this would triangulate new points
+        # and perform bundle adjustment
+        pass
+
+    def get_current_pose(self):
+        """Get the current estimated camera pose."""
+        return self.current_pose.copy()
