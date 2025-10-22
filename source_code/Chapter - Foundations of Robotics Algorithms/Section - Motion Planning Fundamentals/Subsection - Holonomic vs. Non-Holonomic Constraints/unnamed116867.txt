@@ -1,0 +1,44 @@
+import numpy as np
+from scipy.integrate import solve_ivp
+
+class RobotConstraints:
+    """Demonstrate holonomic vs. non-holonomic constraints in motion planning."""
+    
+    def __init__(self, constraint_type):
+        self.constraint_type = constraint_type  # 'holonomic' or 'non_holonomic'
+        
+    def dynamics(self, t, state):
+        """Dynamics model with constraints."""
+        x, y, theta, v, omega = state
+        
+        # Holonomic constraint: x^2 + y^2 = r^2 (circle constraint)
+        if self.constraint_type == 'holonomic':
+            dx = v * np.cos(theta)
+            dy = v * np.sin(theta)
+            dtheta = omega
+            return [dx, dy, dtheta, 0, 0]  # Velocity control inputs zeroed
+            
+        # Non-holonomic constraint: dx*sin(theta) - dy*cos(theta) = 0
+        elif self.constraint_type == 'non_holonomic':
+            dx = v * np.cos(theta)
+            dy = v * np.sin(theta)
+            dtheta = omega
+            return [dx, dy, dtheta, 0, 0]  # No direct lateral motion
+
+def simulate_motion(constraint_type, initial_state, t_span):
+    """Simulate robot motion under given constraints."""
+    robot = RobotConstraints(constraint_type)
+    sol = solve_ivp(robot.dynamics, t_span, initial_state, dense_output=True)
+    return sol
+
+# Example usage
+if __name__ == "__main__":
+    # Initial state: [x, y, theta, v, omega]
+    initial_state = [0.0, 0.0, np.pi/4, 1.0, 0.5]
+    t_span = (0, 10)  # Simulation time
+    
+    # Simulate holonomic motion
+    holonomic_sol = simulate_motion('holonomic', initial_state, t_span)
+    
+    # Simulate non-holonomic motion
+    non_holonomic_sol = simulate_motion('non_holonomic', initial_state, t_span)
