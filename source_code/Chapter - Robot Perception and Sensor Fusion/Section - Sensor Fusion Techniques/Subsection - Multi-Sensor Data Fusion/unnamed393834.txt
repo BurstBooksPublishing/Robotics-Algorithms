@@ -1,0 +1,163 @@
+import numpy as np
+from scipy.stats import multivariate_normal
+
+class MultiSensorFusion:
+    """
+    A class for fusing data from multiple sensors using Kalman Filtering.
+    Assumes Gaussian noise and linear dynamics.
+    """
+    def __init__(self, initial_state, initial_covariance):
+        """
+        Initialize the fusion system with initial state and covariance.
+        
+        Args:
+            initial_state (np.array): Initial state vector (n x 1)
+            initial_covariance (np.array): Initial covariance matrix (n x n)
+        """
+        self.state = initial_state
+        self.covariance = initial_covariance
+
+    def predict(self, F, Q):
+        """
+        Predict the next state using the motion model.
+        
+        Args:
+            F (np.array): State transition matrix (n x n)
+            Q (np.array): Process noise covariance (n x n)
+        """
+        self.state = F @ self.state
+        self.covariance = F @ self.covariance @ F.T + Q
+
+    def update(self, z, R, H):
+        """
+        Update the state estimate with a new sensor measurement.
+        
+        Args:
+            z (np.array): Measurement vector (m x 1)
+            R (np.array): Measurement noise covariance (m x m)
+            H (np.array): Observation matrix (m x n)
+        """
+        # Kalman gain calculation
+        S = H @ self.covariance @ H.T + R
+        K = self.covariance @ H.T @ np.linalg.inv(S)
+        
+        # State and covariance update
+        self.state = self.state + K @ (z - H @ self.state)
+        self.covariance = (np.eye(len(self.state)) - K @ H) @ self.covariance
+
+    def fuse_multiple_sensors(self, measurements, noise_covariances, observation_matrices):
+        """
+        Fuse measurements from multiple sensors sequentially.
+        
+        Args:
+            measurements (list): List of measurement vectors
+            noise_covariances (list): List of measurement noise covariances
+            observation_matrices (list): List of observation matrices
+        """
+        for z, R, H in zip(measurements, noise_covariances, observation_matrices):
+            self.update(z, R, H)
+
+# Example usage
+if __name__ == "__main__":
+    # Initial state (position, velocity) and covariance
+    initial_state = np.array([[0.0], [0.0]])
+    initial_cov = np.eye(2) * 0.1
+    
+    # Create fusion system
+    fusion_system = MultiSensorFusion(initial_state, initial_cov)
+    
+    # Define motion model (constant velocity)
+    F = np.array([[1, 0.1], [0, 1]])
+    Q = np.eye(2) * 0.01  # Process noise
+    
+    # Predict next state
+    fusion_system.predict(F, Q)
+    
+    # Simulate sensor measurements (GPS and IMU)
+    gps_measurement = np.array([[5.2], [0.9]])
+    gps_noise = np.eye(2) * 0.5
+    gps_H = np.eye(2)
+    
+    imu_measurement = np.array([[0.8]])
+    imu_noise = np.eye(1) * 0.2
+    imu_H = np.array([[0, 1]])  # Only measures velocity
+    
+    # Fuse measurements
+    fusion_system.fuse_multiple_sensors(
+
+\begin{lstlisting}
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * A class demonstrating multi-sensor data fusion for robotics perception.
+ * Combines data from multiple sensors to improve accuracy and reliability.
+ */
+public class MultiSensorDataFusion {
+
+    // Sensor data structure
+    static class SensorData {
+        String sensorType;  // e.g., "LiDAR", "Camera", "IMU"
+        double[] readings;  // Array of sensor measurements
+        double confidence;  // Confidence level (0.0 to 1.0)
+
+        public SensorData(String sensorType, double[] readings, double confidence) {
+            this.sensorType = sensorType;
+            this.readings = readings;
+            this.confidence = confidence;
+        }
+    }
+
+    /**
+     * Fuses multiple sensor readings using weighted average based on confidence.
+     * @param sensorDataList List of sensor data to be fused
+     * @return Fused result as an array of doubles
+     */
+    public static double[] fuseSensors(List sensorDataList) {
+        if (sensorDataList == null || sensorDataList.isEmpty()) {
+            throw new IllegalArgumentException("No sensor data provided");
+        }
+
+        int dataLength = sensorDataList.get(0).readings.length;
+        double[] fusedResult = new double[dataLength];
+        double totalWeight = 0.0;
+
+        // Initialize fused result with zeros
+        for (int i = 0; i < dataLength; i++) {
+            fusedResult[i] = 0.0;
+        }
+
+        // Weighted fusion algorithm
+        for (SensorData data : sensorDataList) {
+            if (data.readings.length != dataLength) {
+                throw new IllegalArgumentException("Inconsistent sensor data lengths");
+            }
+
+            for (int i = 0; i < dataLength; i++) {
+                fusedResult[i] += data.readings[i] * data.confidence;
+            }
+            totalWeight += data.confidence;
+        }
+
+        // Normalize by total weight
+        for (int i = 0; i < dataLength; i++) {
+            fusedResult[i] /= totalWeight;
+        }
+
+        return fusedResult;
+    }
+
+    public static void main(String[] args) {
+        // Example usage with simulated sensor data
+        List sensors = new ArrayList<>();
+        sensors.add(new SensorData("LiDAR", new double[]{1.2, 2.3, 3.4}, 0.9));
+        sensors.add(new SensorData("Camera", new double[]{1.1, 2.5, 3.2}, 0.7));
+        sensors.add(new SensorData("IMU", new double[]{1.3, 2.1, 3.5}, 0.8));
+
+        double[] fusedData = fuseSensors(sensors);
+        System.out.println("Fused Sensor Data:");
+        for (double val : fusedData) {
+            System.out.printf("%.2f ", val);
+        }
+    }
+}
