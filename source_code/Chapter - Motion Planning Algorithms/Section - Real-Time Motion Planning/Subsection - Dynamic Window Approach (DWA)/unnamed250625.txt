@@ -1,0 +1,117 @@
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Dynamic Window Approach (DWA) for real-time motion planning in robotics.
+ * Simulates velocity space to find optimal trajectories.
+ */
+public class DynamicWindowApproach {
+    private static final double MAX_VELOCITY = 1.0;  // m/s
+    private static final double MAX_ANGULAR_VELOCITY = Math.PI / 4;  // rad/s
+    private static final double DT = 0.1;  // time step (s)
+    private static final double PREDICTION_TIME = 3.0;  // trajectory prediction horizon (s)
+
+    // Robot state: [x, y, theta, velocity, angular_velocity]
+    private double[] robotState = new double[5];
+
+    // Obstacle positions (x,y coordinates)
+    private List obstacles = new ArrayList<>();
+
+    /**
+     * Main DWA algorithm to compute optimal velocity pair (v, w)
+     */
+    public double[] computeBestVelocity() {
+        double[] bestVelocity = new double[]{0, 0};
+        double maxScore = Double.NEGATIVE_INFINITY;
+
+        // Generate dynamic window based on current velocities and constraints
+        double[][] velocityWindow = generateDynamicWindow();
+
+        // Evaluate all possible velocity pairs in the window
+        for (double[] vw : velocityWindow) {
+            double v = vw[0];
+            double w = vw[1];
+
+            // Simulate trajectory with current (v,w)
+            double[][] trajectory = simulateTrajectory(v, w);
+
+            // Calculate score for this trajectory
+            double score = evaluateTrajectory(trajectory);
+
+            // Update best velocity if score is higher
+            if (score > maxScore) {
+                maxScore = score;
+                bestVelocity[0] = v;
+                bestVelocity[1] = w;
+            }
+        }
+
+        return bestVelocity;
+    }
+
+    /**
+     * Generates admissible velocity window based on constraints
+     */
+    private double[][] generateDynamicWindow() {
+        // Current velocities
+        double vCurrent = robotState[3];
+        double wCurrent = robotState[4];
+
+        // Velocity ranges considering acceleration limits
+        double vMin = Math.max(0, vCurrent - 0.5 * MAX_VELOCITY * DT);
+        double vMax = Math.min(MAX_VELOCITY, vCurrent + 0.5 * MAX_VELOCITY * DT);
+        double wMin = Math.max(-MAX_ANGULAR_VELOCITY, wCurrent - 0.5 * MAX_ANGULAR_VELOCITY * DT);
+        double wMax = Math.min(MAX_ANGULAR_VELOCITY, wCurrent + 0.5 * MAX_ANGULAR_VELOCITY * DT);
+
+        // Generate discrete samples in velocity space
+        List window = new ArrayList<>();
+        for (double v = vMin; v <= vMax; v += 0.1) {
+            for (double w = wMin; w <= wMax; w += 0.05) {
+                window.add(new double[]{v, w});
+            }
+        }
+
+        return window.toArray(new double[0][]);
+    }
+
+    /**
+     * Simulates robot trajectory given velocity pair (v,w)
+     */
+    private double[][] simulateTrajectory(double v, double w) {
+        int steps = (int)(PREDICTION_TIME / DT);
+        double[][] trajectory = new double[steps][3];  // x, y, theta
+
+        double x = robotState[0];
+        double y = robotState[1];
+        double theta = robotState[2];
+
+        for (int i = 0; i < steps; i++) {
+            // Simple unicycle model
+            theta += w * DT;
+            x += v * Math.cos(theta) * DT;
+            y += v * Math.sin(theta) * DT;
+
+            trajectory[i][0] = x;
+            trajectory[i][1] = y;
+            trajectory[i][2] = theta;
+        }
+
+        return trajectory;
+    }
+
+    /**
+     * Evaluates trajectory based on goal distance, clearance, and velocity
+     */
+    private double evaluateTrajectory(double[][] trajectory) {
+        double goalDistance = calculateGoalDistance(trajectory);
+        double clearance = calculateClearance(trajectory);
+        double velocity = trajectory[0][3];  // current velocity
+
+        // Weighted sum of objectives
+        return 0.5 * goalDistance + 0.3 * clearance + 0.2 * velocity;
+    }
+
+    // Helper methods (implementation omitted for brevity)
+    private double calculateGoalDistance(double[][] trajectory) { /* ... */ }
+    private double calculateClearance(double[][] trajectory) { /* ... */ }
+}
