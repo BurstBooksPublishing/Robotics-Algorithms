@@ -1,0 +1,79 @@
+import java.util.*;
+
+/**
+ * Hierarchical Reinforcement Learning (HRL) for Robotics
+ * Simulates a two-level hierarchy: Meta-controller (high-level) and Controller (low-level)
+ */
+public class HierarchicalRL {
+    // High-level policy: Meta-controller selects subgoals
+    private Map> metaPolicy;
+    // Low-level policy: Controller selects primitive actions
+    private Map> controllerPolicy;
+    private double discountFactor = 0.9;
+    private double learningRate = 0.1;
+
+    public HierarchicalRL() {
+        metaPolicy = new HashMap<>();
+        controllerPolicy = new HashMap<>();
+    }
+
+    /**
+     * High-level action selection based on current state and subgoals
+     */
+    public String selectMetaAction(String state, List subgoals) {
+        // Initialize Q-values if not present
+        metaPolicy.putIfAbsent(state, new HashMap<>());
+        Map stateActions = metaPolicy.get(state);
+
+        // ε-greedy exploration
+        if (Math.random() < 0.1 || stateActions.isEmpty()) {
+            return subgoals.get(new Random().nextInt(subgoals.size()));
+        }
+        return Collections.max(stateActions.entrySet(), Map.Entry.comparingByValue()).getKey();
+    }
+
+    /**
+     * Low-level action selection for subgoal achievement
+     */
+    public String selectControllerAction(String state, String subgoal, List actions) {
+        String compositeState = state + ":" + subgoal;
+        controllerPolicy.putIfAbsent(compositeState, new HashMap<>());
+        Map stateActions = controllerPolicy.get(compositeState);
+
+        // ε-greedy exploration
+        if (Math.random() < 0.1 || stateActions.isEmpty()) {
+            return actions.get(new Random().nextInt(actions.size()));
+        }
+        return Collections.max(stateActions.entrySet(), Map.Entry.comparingByValue()).getKey();
+    }
+
+    /**
+     * Update high-level policy using reward from subgoal completion
+     */
+    public void updateMetaPolicy(String state, String subgoal, double reward, String nextState) {
+        metaPolicy.putIfAbsent(state, new HashMap<>());
+        metaPolicy.putIfAbsent(nextState, new HashMap<>());
+
+        double maxQNext = metaPolicy.get(nextState).values().stream()
+                .max(Double::compare).orElse(0.0);
+        double currentQ = metaPolicy.get(state).getOrDefault(subgoal, 0.0);
+        double updatedQ = currentQ + learningRate * (reward + discountFactor * maxQNext - currentQ);
+        metaPolicy.get(state).put(subgoal, updatedQ);
+    }
+
+    /**
+     * Update low-level policy using immediate reward
+     */
+    public void updateControllerPolicy(String state, String subgoal, String action, double reward, String nextState) {
+        String compositeState = state + ":" + subgoal;
+        String nextCompositeState = nextState + ":" + subgoal;
+        controllerPolicy.putIfAbsent(compositeState, new HashMap<>());
+        controllerPolicy.putIfAbsent(nextCompositeState, new HashMap<>());
+
+        double maxQNext = controllerPolicy.get(nextCompositeState).values().stream()
+                .max(Double::compare).orElse(0.0);
+        double currentQ = controllerPolicy.get(compositeState).getOrDefault(action, 0.0);
+        double updatedQ = currentQ + learningRate * (reward + discountFactor * maxQNext - currentQ);
+        controllerPolicy.get(compositeState).put(action, updatedQ);
+    }
+}
