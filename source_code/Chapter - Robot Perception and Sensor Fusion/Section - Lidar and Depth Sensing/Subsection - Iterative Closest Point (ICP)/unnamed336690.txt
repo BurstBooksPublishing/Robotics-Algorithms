@@ -1,0 +1,209 @@
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
+
+def icp(source, target, max_iterations=100, tolerance=1e-5):
+    """
+    Perform ICP alignment between source and target point clouds.
+    
+    Args:
+        source (np.ndarray): Nx3 array of source points.
+        target (np.ndarray): Nx3 array of target points.
+        max_iterations (int): Maximum number of iterations.
+        tolerance (float): Convergence threshold for RMSE change.
+    
+    Returns:
+        np.ndarray: Transformed source points.
+        np.ndarray: 4x4 transformation matrix.
+    """
+    prev_error = 0
+    transformation = np.eye(4)  # Initialize as identity matrix
+    
+    for i in range(max_iterations):
+        # Find nearest neighbors between source and target
+        nbrs = NearestNeighbors(n_neighbors=1, algorithm='kd_tree').fit(target)
+        distances, indices = nbrs.kneighbors(source)
+        
+        # Compute current error (RMSE)
+        curr_error = np.sqrt(np.mean(distances**2))
+        if np.abs(prev_error - curr_error) < tolerance:
+            break
+        prev_error = curr_error
+        
+        # Extract corresponding points
+        target_corr = target[indices.flatten()]
+        
+        # Center the points
+        source_centroid = np.mean(source, axis=0)
+        target_centroid = np.mean(target_corr, axis=0)
+        source_centered = source - source_centroid
+        target_centered = target_corr - target_centroid
+        
+        # Compute cross-covariance matrix
+        H = source_centered.T @ target_centered
+        
+        # SVD to find rotation
+        U, _, Vt = np.linalg.svd(H)
+        R = Vt.T @ U.T
+        
+        # Handle reflection case
+        if np.linalg.det(R) < 0:
+            Vt[-1, :] *= -1
+            R = Vt.T @ U.T
+        
+        # Compute translation
+        t = target_centroid - R @ source_centroid
+        
+        # Update transformation
+        T = np.eye(4)
+        T[:3, :3] = R
+        T[:3, 3] = t
+        transformation = T @ transformation
+        
+        # Apply transformation to source points
+        source = (R @ source.T).T + t
+    
+    return source, transformation
+
+# Example usage
+if __name__ == "__main__":
+    # Generate synthetic point clouds
+    np.random.seed(42)
+    target = np.random.rand(100, 3) * 10
+    
+    # Create transformed version of target as source
+    angle = np.pi / 4  # 45 degrees
+    R_true = np.array([[np.cos(angle), -np.sin(angle), 0],
+
+import org.apache.commons.math3.linear.ArrayRealVector;
+import org.apache.commons.math3.linear.RealVector;
+import org.apache.commons.math3.linear.MatrixUtils;
+import org.apache.commons.math3.linear.RealMatrix;
+import java.util.List;
+import java.util.ArrayList;
+
+public class IterativeClosestPoint {
+    private static final int MAX_ITERATIONS = 100;
+    private static final double TOLERANCE = 1e-5;
+
+    /**
+     * Performs ICP alignment between source and target point clouds.
+     * @param source Source point cloud (moving)
+     * @param target Target point cloud (fixed)
+     * @return Transformation matrix (4x4) aligning source to target
+     */
+    public static RealMatrix performICP(List source, List target) {
+        RealMatrix transformation = MatrixUtils.createRealIdentityMatrix(4);
+        List alignedSource = new ArrayList<>(source);
+        double prevError = Double.MAX_VALUE;
+
+        for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
+            // Find nearest neighbors (data association)
+            List correspondences = findCorrespondences(alignedSource, target);
+
+            // Compute transformation (SVD-based)
+            RealMatrix deltaTransform = computeTransform(alignedSource, correspondences);
+
+            // Apply transformation
+            alignedSource = applyTransform(alignedSource, deltaTransform);
+
+            // Update cumulative transformation
+            transformation = deltaTransform.multiply(transformation);
+
+            // Check convergence
+            double currError = computeError(alignedSource, correspondences);
+            if (Math.abs(prevError - currError) < TOLERANCE) {
+                break;
+            }
+            prevError = currError;
+        }
+        return transformation;
+    }
+
+    private static List findCorrespondences(List source, List target) {
+        List correspondences = new ArrayList<>();
+        for (RealVector point : source) {
+            RealVector nearest = findNearestNeighbor(point, target);
+            correspondences.add(nearest);
+        }
+        return correspondences;
+    }
+
+    private static RealVector findNearestNeighbor(RealVector query, List points) {
+        RealVector nearest = null;
+        double minDist = Double.MAX_VALUE;
+        for (RealVector point : points) {
+            double dist = query.getDistance(point);
+            if (dist < minDist) {
+                minDist = dist;
+                nearest = point;
+            }
+        }
+        return nearest;
+    }
+
+    private static RealMatrix computeTransform(List source, List target) {
+        // Compute centroids
+        RealVector sourceCentroid = computeCentroid(source);
+        RealVector targetCentroid = computeCentroid(target);
+
+        // Compute covariance matrix
+        RealMatrix H = MatrixUtils.createRealMatrix(3, 3);
+        for (int i = 0; i < source.size(); i++) {
+            RealVector s = source.get(i).subtract(sourceCentroid);
+            RealVector t = target.get(i).subtract(targetCentroid);
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 3; col++) {
+                    H.addToEntry(row, col, s.getEntry(row) * t.getEntry(col));
+                }
+            }
+        }
+
+        // SVD decomposition
+        RealMatrix[] svd = MatrixUtils.singularValueDecomposition(H);
+        RealMatrix U = svd[0];
+        RealMatrix V = svd[1];
+
+        // Compute rotation
+        RealMatrix R = V.multiply(U.transpose());
+
+        // Compute translation
+        RealVector t = targetCentroid.subtract(R.operate(sourceCentroid));
+
+        // Build 4x4 transformation matrix
+        RealMatrix transform = MatrixUtils.createRealIdentityMatrix(4);
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                transform.setEntry(i, j, R.getEntry(i, j));
+            }
+            transform.setEntry(i, 3, t.getEntry(i));
+        }
+        return transform;
+    }
+
+    private static RealVector computeCentroid(List points) {
+        RealVector centroid = new ArrayRealVector(3);
+        for (RealVector point : points) {
+            centroid = centroid.add(point);
+        }
+        return centroid.mapDivide(points.size());
+    }
+
+    private static List applyTransform(List points, RealMatrix transform) {
+        List transformed = new ArrayList<>();
+        for (RealVector point : points) {
+            RealVector homogeneous = new ArrayRealVector(4, 1.0);
+            homogeneous.setSubVector(0, point);
+            RealVector transformedHomogeneous = transform.operate(homogeneous);
+            transformed.add(transformedHomogeneous.getSubVector(0, 3));
+        }
+        return transformed;
+    }
+
+    private static double computeError(List source, List target) {
+        double error = 0.0;
+        for (int i = 0; i < source.size(); i++) {
+            error += source.get(i).getDistance(target.get(i));
+        }
+        return error / source.size();
+    }
+}
