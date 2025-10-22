@@ -1,0 +1,66 @@
+import numpy as np
+from scipy.optimize import minimize
+
+class RecedingHorizonController:
+    """Receding Horizon Control (RHC) implementation for robotics."""
+    
+    def __init__(self, horizon=5, dt=0.1):
+        self.horizon = horizon  # Prediction horizon
+        self.dt = dt            # Time step
+        
+    def system_dynamics(self, x, u):
+        """Discrete-time system dynamics (simplified 2D robot model)."""
+        # x: [pos_x, pos_y, theta], u: [v, omega]
+        theta = x[2]
+        dx = np.array([
+            u[0] * np.cos(theta) * self.dt,
+            u[0] * np.sin(theta) * self.dt,
+            u[1] * self.dt
+        ])
+        return x + dx
+    
+    def cost_function(self, u_sequence, x0, goal):
+        """Cost function for trajectory optimization."""
+        cost = 0.0
+        x = x0.copy()
+        
+        # Reshape control sequence (horizon x 2)
+        u_sequence = u_sequence.reshape((self.horizon, 2))
+        
+        for k in range(self.horizon):
+            u = u_sequence[k]
+            x = self.system_dynamics(x, u)
+            
+            # Quadratic cost: distance to goal + control effort
+            cost += np.sum((x[:2] - goal[:2])**2) + 0.1 * np.sum(u**2)
+            
+        return cost
+    
+    def solve(self, x0, goal, u_init=None):
+        """Solve RHC problem for current state and goal."""
+        if u_init is None:
+            u_init = np.zeros(2 * self.horizon)  # Flattened control sequence
+            
+        # Define bounds for controls (v, omega)
+        bounds = [(0, 1), (-1, 1)] * self.horizon
+        
+        # Solve optimization problem
+        res = minimize(
+            self.cost_function,
+            u_init,
+            args=(x0, goal),
+            bounds=bounds,
+            method='SLSQP'
+        )
+        
+        return res.x.reshape((self.horizon, 2))  # Return optimal control sequence
+
+# Example usage
+if __name__ == "__main__":
+    rhc = RecedingHorizonController(horizon=5)
+    x0 = np.array([0, 0, 0])      # Initial state
+    goal = np.array([5, 5, 0])    # Goal state
+    
+    # Get optimal control sequence
+    u_opt = rhc.solve(x0, goal)
+    print("Optimal control sequence:\n", u_opt)
