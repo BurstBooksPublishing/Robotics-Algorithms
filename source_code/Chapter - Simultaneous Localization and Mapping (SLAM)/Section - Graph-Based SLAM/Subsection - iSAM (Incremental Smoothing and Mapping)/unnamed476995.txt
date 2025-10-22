@@ -1,0 +1,122 @@
+import java.util.*;
+
+/**
+ * A simplified iSAM (Incremental Smoothing and Mapping) implementation for Graph-Based SLAM.
+ * This class models a factor graph and performs incremental updates for robot pose estimation.
+ */
+public class ISAM2 {
+    private List poses; // Robot poses (vertices in the graph)
+    private List factors; // Constraints (edges in the graph)
+    private Matrix covarianceMatrix; // Covariance matrix for uncertainty estimation
+
+    public ISAM2() {
+        poses = new ArrayList<>();
+        factors = new ArrayList<>();
+        covarianceMatrix = new Matrix(0, 0);
+    }
+
+    /**
+     * Adds a new pose to the graph with initial uncertainty.
+     * @param initialPose The initial pose estimate.
+     */
+    public void addPose(Pose2D initialPose) {
+        poses.add(initialPose);
+        // Expand covariance matrix for new pose
+        covarianceMatrix = covarianceMatrix.expand(3, 3); // 3x3 for (x, y, theta)
+    }
+
+    /**
+     * Adds a factor (constraint) between two poses.
+     * @param fromPoseIdx Index of the first pose.
+     * @param toPoseIdx Index of the second pose.
+     * @param measurement Relative measurement between poses.
+     * @param noiseModel Measurement noise model.
+     */
+    public void addFactor(int fromPoseIdx, int toPoseIdx, Pose2D measurement, Matrix noiseModel) {
+        factors.add(new Factor(fromPoseIdx, toPoseIdx, measurement, noiseModel));
+    }
+
+    /**
+     * Performs incremental update of the graph using iSAM algorithm.
+     */
+    public void update() {
+        // 1. Linearize new factors
+        List jacobians = new ArrayList<>();
+        List residuals = new ArrayList<>();
+
+        for (Factor factor : factors) {
+            // Compute Jacobian and residual for each factor
+            Matrix[] jr = linearizeFactor(factor);
+            jacobians.add(jr[0]);
+            residuals.add(jr[1]);
+        }
+
+        // 2. Update the information matrix (inverse of covariance)
+        Matrix informationMatrix = covarianceMatrix.inverse();
+        for (int i = 0; i < jacobians.size(); i++) {
+            Matrix J = jacobians.get(i);
+            informationMatrix = informationMatrix.add(J.transpose().mult(J));
+        }
+
+        // 3. Solve the linear system (using Cholesky decomposition)
+        Matrix delta = informationMatrix.choleskySolve(computeRHS(jacobians, residuals));
+
+        // 4. Update poses
+        for (int i = 0; i < poses.size(); i++) {
+            Pose2D pose = poses.get(i);
+            double dx = delta.get(3*i, 0);
+            double dy = delta.get(3*i+1, 0);
+            double dtheta = delta.get(3*i+2, 0);
+            pose.update(dx, dy, dtheta);
+        }
+
+        // 5. Update covariance matrix
+        covarianceMatrix = informationMatrix.inverse();
+    }
+
+    // Helper methods for linearization and RHS computation would follow here...
+    // (Omitted for brevity but would include factor linearization and RHS assembly)
+}
+
+/**
+ * Simple 2D pose representation (x, y, theta).
+ */
+class Pose2D {
+    public double x, y, theta;
+
+    public Pose2D(double x, double y, double theta) {
+        this.x = x;
+        this.y = y;
+        this.theta = theta;
+    }
+
+    public void update(double dx, double dy, double dtheta) {
+        this.x += dx;
+        this.y += dy;
+        this.theta += dtheta;
+    }
+}
+
+/**
+ * Represents a factor (constraint) between two poses.
+ */
+class Factor {
+    public int fromPoseIdx, toPoseIdx;
+    public Pose2D measurement;
+    public Matrix noiseModel;
+
+    public Factor(int from, int to, Pose2D measurement, Matrix noiseModel) {
+        this.fromPoseIdx = from;
+        this.toPoseIdx = to;
+        this.measurement = measurement;
+        this.noiseModel = noiseModel;
+    }
+}
+
+/**
+ * Simplified matrix implementation for the example.
+ */
+class Matrix {
+    // Implementation would include basic matrix operations
+    // (Omitted for brevity but would include multiply, inverse, transpose, etc.)
+}
