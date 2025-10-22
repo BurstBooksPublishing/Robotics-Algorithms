@@ -1,0 +1,49 @@
+import numpy as np
+import gtsam
+
+def factor_graph_slam(odometry_measurements, landmark_measurements):
+    """
+    Implement Factor Graph SLAM using GTSAM library.
+    
+    Args:
+        odometry_measurements: List of (x, y, theta) odometry readings
+        landmark_measurements: List of (landmark_id, x, y) observations
+    """
+    # Initialize factor graph and values
+    graph = gtsam.NonlinearFactorGraph()
+    initial_estimate = gtsam.Values()
+
+    # Add prior on the first pose (assuming origin)
+    prior_noise = gtsam.noiseModel.Diagonal.Sigmas(np.array([0.3, 0.3, 0.1]))
+    graph.add(gtsam.PriorFactorPose2(1, gtsam.Pose2(0.0, 0.0, 0.0), prior_noise))
+    initial_estimate.insert(1, gtsam.Pose2(0.0, 0.0, 0.0))
+
+    # Add odometry factors (between consecutive poses)
+    odometry_noise = gtsam.noiseModel.Diagonal.Sigmas(np.array([0.2, 0.2, 0.1]))
+    for i, (dx, dy, dtheta) in enumerate(odometry_measurements):
+        graph.add(gtsam.BetweenFactorPose2(
+            i+1, i+2, gtsam.Pose2(dx, dy, dtheta), odometry_noise))
+        initial_estimate.insert(i+2, gtsam.Pose2(
+            initial_estimate.atPose2(i+1).x() + dx,
+            initial_estimate.atPose2(i+1).y() + dy,
+            initial_estimate.atPose2(i+1).theta() + dtheta))
+
+    # Add landmark observation factors
+    measurement_noise = gtsam.noiseModel.Diagonal.Sigmas(np.array([0.1, 0.1]))
+    for pose_id, landmark_id, lx, ly in landmark_measurements:
+        graph.add(gtsam.BearingRangeFactor2D(
+            pose_id, landmark_id, 
+            gtsam.Rot2.atan2(ly, lx),  # Bearing
+            np.sqrt(lx**2 + ly**2),    # Range
+            measurement_noise))
+
+    # Optimize using Levenberg-Marquardt
+    params = gtsam.LevenbergMarquardtParams()
+    optimizer = gtsam.LevenbergMarquardtOptimizer(graph, initial_estimate, params)
+    result = optimizer.optimize()
+
+    # Extract and return optimized trajectory
+    trajectory = []
+    for i in range(1, len(odometry_measurements)+2):
+        trajectory.append(result.atPose2(i))
+    return trajectory
