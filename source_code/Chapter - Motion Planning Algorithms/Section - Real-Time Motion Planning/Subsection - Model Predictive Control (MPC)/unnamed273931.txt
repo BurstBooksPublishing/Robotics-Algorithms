@@ -1,0 +1,92 @@
+import numpy as np
+import cvxpy as cp
+from scipy.linalg import block_diag
+
+class ModelPredictiveControl:
+    def __init__(self, A, B, Q, R, N, x_min=None, x_max=None, u_min=None, u_max=None):
+        """
+        MPC controller for linear systems.
+        
+        Args:
+            A (np.ndarray): State transition matrix (n x n)
+            B (np.ndarray): Control matrix (n x m)
+            Q (np.ndarray): State cost matrix (n x n)
+            R (np.ndarray): Control cost matrix (m x m)
+            N (int): Prediction horizon
+            x_min/x_max (np.ndarray): State constraints (optional)
+            u_min/u_max (np.ndarray): Control constraints (optional)
+        """
+        self.A, self.B = A, B
+        self.Q, self.R = Q, R
+        self.N = N
+        self.n, self.m = B.shape
+        self.x_min, self.x_max = x_min, x_max
+        self.u_min, self.u_max = u_min, u_max
+
+    def solve(self, x0):
+        """Solve MPC problem for initial state x0"""
+        # Define optimization variables
+        x = cp.Variable((self.n, self.N + 1))
+        u = cp.Variable((self.m, self.N))
+
+        # Cost function and constraints
+        cost = 0
+        constraints = [x[:, 0] == x0]  # Initial condition
+
+        for t in range(self.N):
+            cost += cp.quad_form(x[:, t], self.Q) + cp.quad_form(u[:, t], self.R)
+            constraints += [x[:, t + 1] == self.A @ x[:, t] + self.B @ u[:, t]]
+
+            # Add constraints if specified
+            if self.x_min is not None and self.x_max is not None:
+                constraints += [x[:, t] >= self.x_min, x[:, t] <= self.x_max]
+            if self.u_min is not None and self.u_max is not None:
+                constraints += [u[:, t] >= self.u_min, u[:, t] <= self.u_max]
+
+        # Terminal cost
+        cost += cp.quad_form(x[:, self.N], self.Q)
+
+        # Solve the problem
+        prob = cp.Problem(cp.Minimize(cost), constraints)
+        prob.solve(solver=cp.OSQP, verbose=False)
+
+        return u[:, 0].value if prob.status == cp.OPTIMAL else None
+
+# Example usage for 2D robot motion planning
+if __name__ == "__main__":
+    # Discrete-time double integrator model (position + velocity)
+    dt = 0.1
+    A = np.array([[1, dt], [0, 1]])
+    B = np.array([[0.5*dt**2], [dt]])
+    
+    # Cost matrices (prioritize position error over control effort)
+    Q = np.diag([10, 1])
+    R = np.array([[0.1]])
+    
+    # Constraints (velocity and acceleration limits)
+    x_min = np.array([-np.inf, -2.0])  # Max velocity = 2 m/s
+    x_max = np.array([np.inf, 2.0])
+    u_min = np.array([-1.0])          # Max acceleration = 1 m/s²
+    u_max = np.array([1.0])
+    
+    # Create MPC controller
+    mpc = ModelPredictiveControl(A, B, Q, R, N=10, x_min=x_min, x_max=x_max, u_min=u_min, u_max=u_max)
+    
+    # Simulate closed-loop control
+    x = np.array([0.0, 0.0])  # Initial state [position, velocity]
+    goal = 5.0                # Target position
+    
+    for _ in range(100):
+        # Adjust Q matrix to track goal position (first state)
+        Q_goal = np.diag([100, 1]) if abs(x[0] - goal) > 0.1 else Q
+        mpc.Q = Q_goal
+        
+        # Get control input
+        u = mpc.solve(x)
+        if u is None:
+            print("MPC failed to find solution")
+            break
+        
+        # Apply control and update state
+        x = A @ x + B @ u
+        print(f"Position: {x[0]:.2f}m, Velocity: {x[1]:.2f}m/s, Control: {u[0]:.2f}m/s²")
