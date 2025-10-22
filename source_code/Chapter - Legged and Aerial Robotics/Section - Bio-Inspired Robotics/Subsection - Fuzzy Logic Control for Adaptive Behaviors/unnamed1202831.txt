@@ -1,0 +1,46 @@
+import numpy as np
+import skfuzzy as fuzz
+from skfuzzy import control as ctrl
+
+# Define input variables (sensor readings)
+obstacle_distance = ctrl.Antecedent(np.arange(0, 101, 1), 'obstacle_distance')
+terrain_roughness = ctrl.Antecedent(np.arange(0, 11, 1), 'terrain_roughness')
+
+# Define output variable (motor adjustment)
+motor_speed = ctrl.Consequent(np.arange(0, 101, 1), 'motor_speed')
+
+# Fuzzy membership functions for inputs
+obstacle_distance['near'] = fuzz.trimf(obstacle_distance.universe, [0, 0, 50])
+obstacle_distance['medium'] = fuzz.trimf(obstacle_distance.universe, [30, 50, 70])
+obstacle_distance['far'] = fuzz.trimf(obstacle_distance.universe, [50, 100, 100])
+
+terrain_roughness['smooth'] = fuzz.trimf(terrain_roughness.universe, [0, 0, 5])
+terrain_roughness['moderate'] = fuzz.trimf(terrain_roughness.universe, [3, 5, 7])
+terrain_roughness['rough'] = fuzz.trimf(terrain_roughness.universe, [5, 10, 10])
+
+# Fuzzy membership functions for output
+motor_speed['slow'] = fuzz.trimf(motor_speed.universe, [0, 0, 50])
+motor_speed['medium'] = fuzz.trimf(motor_speed.universe, [30, 50, 70])
+motor_speed['fast'] = fuzz.trimf(motor_speed.universe, [50, 100, 100])
+
+# Fuzzy rules for adaptive behavior
+rule1 = ctrl.Rule(obstacle_distance['near'] | terrain_roughness['rough'], motor_speed['slow'])
+rule2 = ctrl.Rule(obstacle_distance['medium'] & terrain_roughness['moderate'], motor_speed['medium'])
+rule3 = ctrl.Rule(obstacle_distance['far'] & terrain_roughness['smooth'], motor_speed['fast'])
+
+# Create control system
+speed_ctrl = ctrl.ControlSystem([rule1, rule2, rule3])
+adaptive_controller = ctrl.ControlSystemSimulation(speed_ctrl)
+
+# Example usage for a legged robot
+def adjust_gait(sensor_data):
+    """Adapt motor speed based on environment"""
+    adaptive_controller.input['obstacle_distance'] = sensor_data['distance']
+    adaptive_controller.input['terrain_roughness'] = sensor_data['roughness']
+    adaptive_controller.compute()
+    return adaptive_controller.output['motor_speed']
+
+# Simulate sensor input (bio-inspired reactive behavior)
+sensor_input = {'distance': 35, 'roughness': 4}
+adjusted_speed = adjust_gait(sensor_input)
+print(f"Adapted motor speed: {adjusted_speed:.2f}")
