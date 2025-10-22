@@ -1,0 +1,100 @@
+import numpy as np
+from scipy.optimize import minimize
+
+class LinearMPC:
+    """Linear Model Predictive Control for robotics."""
+    def __init__(self, A, B, Q, R, N):
+        """
+        Initialize Linear MPC.
+        Args:
+            A: State transition matrix (linear dynamics).
+            B: Control input matrix.
+            Q: State cost matrix.
+            R: Control cost matrix.
+            N: Prediction horizon.
+        """
+        self.A = A
+        self.B = B
+        self.Q = Q
+        self.R = R
+        self.N = N
+
+    def cost_function(self, u_flat, x0):
+        """Compute cost for given control sequence."""
+        u = u_flat.reshape((-1, self.B.shape[1]))
+        x = x0
+        cost = 0.0
+        for i in range(self.N):
+            x = self.A @ x + self.B @ u[i]
+            cost += x.T @ self.Q @ x + u[i].T @ self.R @ u[i]
+        return cost
+
+    def solve(self, x0):
+        """Solve MPC problem for initial state x0."""
+        u0 = np.zeros((self.N, self.B.shape[1]))
+        res = minimize(self.cost_function, u0.flatten(), args=(x0,),
+                       method='SLSQP', bounds=None)
+        return res.x.reshape((-1, self.B.shape[1]))[0]  # Return first control input
+
+class NonlinearMPC:
+    """Nonlinear Model Predictive Control for robotics."""
+    def __init__(self, f, h, Q, R, N):
+        """
+        Initialize Nonlinear MPC.
+        Args:
+            f: Nonlinear state transition function (x_next = f(x, u)).
+            h: Nonlinear output/cost function (cost = h(x, u)).
+            Q: State cost weight matrix.
+            R: Control cost weight matrix.
+            N: Prediction horizon.
+        """
+        self.f = f
+        self.h = h
+        self.Q = Q
+        self.R = R
+        self.N = N
+
+    def cost_function(self, u_flat, x0):
+        """Compute cost for given control sequence."""
+        u = u_flat.reshape((-1, 2))  # Assuming 2D control input
+        x = x0.copy()
+        cost = 0.0
+        for i in range(self.N):
+            x = self.f(x, u[i])
+            cost += self.h(x, u[i])  # h() should return scalar cost
+        return cost
+
+    def solve(self, x0):
+        """Solve nonlinear MPC problem for initial state x0."""
+        u0 = np.zeros((self.N, 2))  # Initial guess (2D control)
+        bounds = [(-1, 1) for _ in range(self.N * 2)]  # Example bounds
+        res = minimize(self.cost_function, u0.flatten(), args=(x0,),
+                       method='SLSQP', bounds=bounds)
+        return res.x.reshape((-1, 2))[0]  # Return first control input
+
+# Example usage for a mobile robot
+if __name__ == "__main__":
+    # Linear MPC example (double integrator)
+    dt = 0.1
+    A = np.array([[1, dt], [0, 1]])
+    B = np.array([[0.5*dt**2], [dt]])
+    Q = np.diag([1.0, 0.1])
+    R = np.array([[0.01]])
+    mpc = LinearMPC(A, B, Q, R, N=10)
+    x0 = np.array([1.0, 0.5])
+    u_opt = mpc.solve(x0)
+    print(f"Linear MPC optimal control: {u_opt}")
+
+    # Nonlinear MPC example (unicycle model)
+    def f(x, u):
+        theta = x[2]
+        v, w = u[0], u[1]
+        return x + np.array([v*np.cos(theta), v*np.sin(theta), w]) * dt
+
+    def h(x, u):
+        return x[0]**2 + x[1]**2 + 0.1*(u[0]**2 + u[1]**2)  # Target at origin
+
+    mpc_nl = NonlinearMPC(f, h, None, None, N=8)
+    x0_nl = np.array([2.0, 1.5, np.pi/4])
+    u_opt_nl = mpc_nl.solve(x0_nl)
+    print(f"Nonlinear MPC optimal control: {u_opt_nl}")
