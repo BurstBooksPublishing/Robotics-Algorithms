@@ -1,0 +1,89 @@
+import org.ejml.simple.SimpleMatrix;
+import java.util.List;
+
+/**
+ * Bundle Adjustment implementation for SLAM using Levenberg-Marquardt optimization.
+ * Optimizes camera poses and 3D landmarks jointly to minimize reprojection error.
+ */
+public class BundleAdjustmentSLAM {
+
+    // Camera intrinsic parameters (assumed constant)
+    private final SimpleMatrix K; // 3x3 calibration matrix
+    private final double lambda;  // Damping factor for LM
+
+    public BundleAdjustmentSLAM(SimpleMatrix K, double lambda) {
+        this.K = K;
+        this.lambda = lambda;
+    }
+
+    /**
+     * Optimize camera poses and landmarks using Levenberg-Marquardt
+     * @param observations List of 2D-3D point correspondences
+     * @param cameraPoses Initial camera poses (will be updated)
+     * @param landmarks Initial 3D landmarks (will be updated)
+     * @param iterations Max optimization iterations
+     */
+    public void optimize(List observations, 
+                        List cameraPoses,
+                        List landmarks,
+                        int iterations) {
+
+        for (int iter = 0; iter < iterations; iter++) {
+            SimpleMatrix J = computeJacobian(observations, cameraPoses, landmarks);
+            SimpleMatrix r = computeResiduals(observations, cameraPoses, landmarks);
+            
+            // LM update: (J^T*J + lambda*I) * delta = -J^T*r
+            SimpleMatrix JT = J.transpose();
+            SimpleMatrix JTJ = JT.mult(J);
+            SimpleMatrix I = SimpleMatrix.identity(JTJ.numRows());
+            SimpleMatrix A = JTJ.plus(I.scale(lambda));
+            SimpleMatrix b = JT.mult(r).negative();
+            
+            SimpleMatrix delta = A.solve(b);
+            updateParameters(delta, cameraPoses, landmarks);
+        }
+    }
+
+    /**
+     * Compute Jacobian matrix of reprojection errors w.r.t. all parameters
+     */
+    private SimpleMatrix computeJacobian(List observations,
+                                       List cameraPoses,
+                                       List landmarks) {
+        // Implementation would compute partial derivatives of:
+        // - Reprojection error w.r.t. camera pose parameters (6DOF)
+        // - Reprojection error w.r.t. 3D landmark coordinates
+        // Returned as sparse block matrix for efficiency
+        return new SimpleMatrix(0, 0); // Placeholder
+    }
+
+    /**
+     * Compute vector of reprojection errors for all observations
+     */
+    private SimpleMatrix computeResiduals(List observations,
+                                        List cameraPoses,
+                                        List landmarks) {
+        // Implementation would:
+        // 1. Project 3D landmarks into camera frames using current poses
+        // 2. Compute difference between observed and projected 2D points
+        return new SimpleMatrix(0, 0); // Placeholder
+    }
+
+    /**
+     * Update parameters using LM delta vector
+     */
+    private void updateParameters(SimpleMatrix delta,
+                                List cameraPoses,
+                                List landmarks) {
+        // Implementation would:
+        // 1. Unpack delta vector into pose and landmark increments
+        // 2. Apply updates using Lie algebra for poses
+    }
+
+    // Helper class representing a 2D-3D observation
+    public static class Observation {
+        public int cameraIndex;  // Which camera observed this
+        public int landmarkIndex; // Which landmark was observed
+        public SimpleMatrix point2D; // Observed 2D coordinates
+    }
+}
