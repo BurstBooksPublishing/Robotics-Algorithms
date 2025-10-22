@@ -1,0 +1,88 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+class PIDController:
+    """
+    A Proportional-Integral-Derivative (PID) controller for robotics applications.
+    """
+    def __init__(self, kp, ki, kd, setpoint, dt=0.01):
+        """
+        Initialize PID controller with gains and setpoint.
+        
+        Args:
+            kp (float): Proportional gain
+            ki (float): Integral gain
+            kd (float): Derivative gain
+            setpoint (float): Desired target value
+            dt (float): Time step for discrete integration
+        """
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.setpoint = setpoint
+        self.dt = dt
+        self.prev_error = 0
+        self.integral = 0
+
+    def compute(self, current_value):
+        """
+        Compute PID control output based on current system state.
+        
+        Args:
+            current_value (float): Current measured value
+            
+        Returns:
+            float: Control signal
+        """
+        error = self.setpoint - current_value
+        
+        # Proportional term
+        p_term = self.kp * error
+        
+        # Integral term (discrete approximation)
+        self.integral += error * self.dt
+        i_term = self.ki * self.integral
+        
+        # Derivative term (discrete approximation)
+        derivative = (error - self.prev_error) / self.dt
+        d_term = self.kd * derivative
+        
+        # Store error for next derivative calculation
+        self.prev_error = error
+        
+        # Sum all terms for control output
+        return p_term + i_term + d_term
+
+# Simulation parameters
+sim_time = 10.0  # seconds
+dt = 0.01        # time step
+steps = int(sim_time / dt)
+
+# Create PID controller (tuned for a robotic arm position control)
+pid = PIDController(kp=1.2, ki=0.5, kd=0.05, setpoint=1.0, dt=dt)
+
+# Simulation loop
+position = 0.0  # Initial position
+positions = []
+times = np.linspace(0, sim_time, steps)
+
+for t in times:
+    # Store current position
+    positions.append(position)
+    
+    # Compute control signal
+    control = pid.compute(position)
+    
+    # Simple plant model (1st order system with some noise)
+    position += control * dt - 0.1 * position * dt + np.random.normal(0, 0.01)
+    
+# Plot results
+plt.figure(figsize=(10, 6))
+plt.plot(times, positions, label='Actual Position')
+plt.axhline(pid.setpoint, color='r', linestyle='--', label='Setpoint')
+plt.xlabel('Time (s)')
+plt.ylabel('Position')
+plt.title('PID Control Response for Robotic System')
+plt.legend()
+plt.grid(True)
+plt.show()
