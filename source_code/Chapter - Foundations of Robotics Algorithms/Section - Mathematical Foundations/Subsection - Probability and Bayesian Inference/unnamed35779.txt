@@ -1,0 +1,64 @@
+import java.util.Arrays;
+
+/**
+ * A Java implementation of Bayesian inference for robot sensor fusion.
+ * Demonstrates updating beliefs (probabilities) based on new evidence.
+ */
+public class BayesianInference {
+
+    // Prior probabilities (initial belief) about the robot's location
+    private double[] priorProbabilities;
+
+    // Likelihoods (sensor model): P(Evidence | Location)
+    private double[][] likelihoods;
+
+    public BayesianInference(double[] prior, double[][] likelihood) {
+        this.priorProbabilities = Arrays.copyOf(prior, prior.length);
+        this.likelihoods = new double[likelihood.length][];
+        for (int i = 0; i < likelihood.length; i++) {
+            this.likelihoods[i] = Arrays.copyOf(likelihood[i], likelihood[i].length);
+        }
+    }
+
+    /**
+     * Update beliefs using Bayes' Rule: P(A|B) = P(B|A) * P(A) / P(B)
+     * @param evidenceIndex The observed evidence (sensor reading)
+     * @return Updated posterior probabilities
+     */
+    public double[] updateBeliefs(int evidenceIndex) {
+        double[] posterior = new double[priorProbabilities.length];
+        double marginalProbability = 0.0;
+
+        // Calculate numerator and marginal probability
+        for (int i = 0; i < priorProbabilities.length; i++) {
+            posterior[i] = likelihoods[i][evidenceIndex] * priorProbabilities[i];
+            marginalProbability += posterior[i];
+        }
+
+        // Normalize to get proper probabilities
+        for (int i = 0; i < posterior.length; i++) {
+            posterior[i] /= marginalProbability;
+        }
+
+        // Update prior for next iteration
+        priorProbabilities = Arrays.copyOf(posterior, posterior.length);
+
+        return posterior;
+    }
+
+    public static void main(String[] args) {
+        // Example: Robot localization with 3 possible locations
+        double[] prior = {0.3, 0.6, 0.1};  // Initial belief
+        double[][] likelihood = {
+            {0.7, 0.2, 0.1},  // P(Evidence | Location 1)
+            {0.1, 0.8, 0.1},  // P(Evidence | Location 2)
+            {0.1, 0.3, 0.6}   // P(Evidence | Location 3)
+        };
+
+        BayesianInference bayes = new BayesianInference(prior, likelihood);
+
+        // Simulate sensor reading evidence (index 1)
+        double[] updated = bayes.updateBeliefs(1);
+        System.out.println("Updated probabilities: " + Arrays.toString(updated));
+    }
+}
