@@ -1,0 +1,67 @@
+/**
+ * A Java class simulating control logic for a robotic prosthetic arm.
+ * Implements inverse kinematics and grip strength modulation for assistive robotics.
+ * Context: Robotics Algorithms - Chapter 9: Robotic Manipulation and Grasping.
+ */
+public class ProstheticArmController {
+    private double[] jointAngles; // Stores angles for shoulder, elbow, wrist joints
+    private double gripStrength;  // Current grip force (0-100%)
+    private final double ARM_LENGTH = 0.75; // Standard arm length in meters
+
+    /**
+     * Calculates inverse kinematics for target position (x,y,z)
+     * @param target 3D coordinate in workspace
+     * @return boolean indicating success
+     */
+    public boolean moveToPosition(double[] target) {
+        // Validate input (simplified 3DOF arm)
+        if (target.length != 3 || target[2] < 0) return false;
+
+        // Inverse kinematics calculations (simplified)
+        double x = target[0], y = target[1], z = target[2];
+        double shoulderPitch = Math.atan2(y, x);
+        double elbowAngle = Math.acos(
+            (x*x + y*y + z*z - 2*ARM_LENGTH*ARM_LENGTH) 
+            / (2*ARM_LENGTH*ARM_LENGTH)
+        );
+        double wristAngle = Math.PI/2 - elbowAngle/2; // Maintain natural orientation
+
+        // Update joint angles
+        this.jointAngles = new double[]{
+            shoulderPitch, 
+            elbowAngle, 
+            wristAngle
+        };
+        return true;
+    }
+
+    /**
+     * Adjusts grip strength based on object fragility
+     * @param fragilityFactor 0.1 (egg) to 1.0 (metal tool)
+     */
+    public void setGripStrength(double fragilityFactor) {
+        // Sigmoid function for smooth strength modulation
+        this.gripStrength = 100 / (1 + Math.exp(-10*(fragilityFactor-0.5)));
+    }
+
+    /**
+     * Executes grasp with current parameters
+     */
+    public void executeGrasp() {
+        System.out.printf(
+            "Grasping at angles: [%.2f, %.2f, %.2f] with %.1f%% strength%n",
+            Math.toDegrees(jointAngles[0]),
+            Math.toDegrees(jointAngles[1]),
+            Math.toDegrees(jointAngles[2]),
+            gripStrength
+        );
+    }
+
+    // Example usage
+    public static void main(String[] args) {
+        ProstheticArmController arm = new ProstheticArmController();
+        arm.moveToPosition(new double[]{0.4, 0.3, 0.2});
+        arm.setGripStrength(0.3); // Delicate object
+        arm.executeGrasp();
+    }
+}
