@@ -1,0 +1,92 @@
+import numpy as np
+from scipy.integrate import odeint
+
+class FeedbackLinearizationController:
+    """
+    Implements feedback linearization for a nonlinear robotic system.
+    Assumes a 2-DOF robotic arm for demonstration purposes.
+    """
+    def __init__(self, m1, m2, l1, l2, g=9.81):
+        self.m1 = m1  # Mass of link 1 (kg)
+        self.m2 = m2  # Mass of link 2 (kg)
+        self.l1 = l1  # Length of link 1 (m)
+        self.l2 = l2  # Length of link 2 (m)
+        self.g = g    # Gravitational acceleration (m/s^2)
+
+    def nonlinear_dynamics(self, x, t, u):
+        """
+        Computes the nonlinear dynamics of the 2-DOF robotic arm.
+        x: state vector [theta1, theta2, dtheta1, dtheta2]
+        u: control input [tau1, tau2]
+        """
+        theta1, theta2, dtheta1, dtheta2 = x
+        tau1, tau2 = u
+
+        # Coriolis and centrifugal terms
+        c2 = np.cos(theta2)
+        s2 = np.sin(theta2)
+        h = self.m2 * self.l1 * self.l2 * c2
+        M11 = self.m1 * self.l1**2 + self.m2 * (self.l1**2 + self.l2**2 + 2 * self.l1 * self.l2 * c2)
+        M12 = self.m2 * (self.l2**2 + self.l1 * self.l2 * c2)
+        M22 = self.m2 * self.l2**2
+        C1 = -self.m2 * self.l1 * self.l2 * s2 * (2 * dtheta1 * dtheta2 + dtheta2**2)
+        C2 = self.m2 * self.l1 * self.l2 * s2 * dtheta1**2
+        G1 = (self.m1 + self.m2) * self.g * self.l1 * np.cos(theta1) + self.m2 * self.g * self.l2 * np.cos(theta1 + theta2)
+        G2 = self.m2 * self.g * self.l2 * np.cos(theta1 + theta2)
+
+        # Compute accelerations
+        det_M = M11 * M22 - M12**2
+        ddtheta1 = (M22 * (tau1 - C1 - G1) - M12 * (tau2 - C2 - G2)) / det_M
+        ddtheta2 = (-M12 * (tau1 - C1 - G1) + M11 * (tau2 - C2 - G2)) / det_M
+
+        return [dtheta1, dtheta2, ddtheta1, ddtheta2]
+
+    def linearize(self, x, x_des, K):
+        """
+        Feedback linearization control law.
+        x: current state
+        x_des: desired state [theta1_d, theta2_d, dtheta1_d, dtheta2_d]
+        K: gain matrix for linear controller
+        """
+        theta1, theta2, dtheta1, dtheta2 = x
+        theta1_d, theta2_d, dtheta1_d, dtheta2_d = x_des
+
+        # Compute error terms
+        e = np.array([theta1 - theta1_d, theta2 - theta2_d])
+        de = np.array([dtheta1 - dtheta1_d, dtheta2 - dtheta2_d])
+
+        # Linearizing control law (computed torque)
+        v = -K @ np.concatenate((e, de))  # Linear control term
+        u_lin = np.array([v[0], v[1]])
+
+        # Compute nonlinear terms to cancel
+        zero_u = np.array([0, 0])
+        nonlinear_terms = np.array(self.nonlinear_dynamics(x, 0, zero_u))[2:]
+
+        # Final control input
+        u = u_lin - nonlinear_terms
+        return u
+
+# Example usage
+if __name__ == "__main__":
+    # System parameters
+    m1, m2 = 1.0, 0.5
+    l1, l2 = 0.5, 0.3
+    controller = FeedbackLinearizationController(m1, m2, l1, l2)
+
+    # Desired trajectory (step input)
+    x_des = np.array([np.pi/4, np.pi/6, 0, 0])  # [theta1, theta2, dtheta1, dtheta2]
+
+    # Initial state
+    x0 = np.array([0, 0, 0, 0])
+
+    # Simulation parameters
+    t = np.linspace(0, 10, 1000)
+    K = np.diag([10, 10, 5, 5])  # PD gains
+
+    # Simulate closed-loop system
+    def closed_loop(x, t):
+        u = controller.linearize(x, x_des, K)
+        return controller.nonlinear_dynamics(x, t, u)
+
+    x_sim = odeint(closed_loop, x0, t)
