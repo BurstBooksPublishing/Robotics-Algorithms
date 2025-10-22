@@ -1,0 +1,82 @@
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Implements a game-theoretic coordination algorithm for multi-robot systems.
+ * Models a Nash Equilibrium-based task allocation strategy.
+ */
+public class GameTheoreticCoordination {
+
+    // Represents a robot agent with a strategy and payoff
+    static class Robot {
+        int id;
+        double[] strategy; // Mixed strategy probabilities
+        double payoff;     // Cumulative payoff
+
+        public Robot(int id, int strategySize) {
+            this.id = id;
+            this.strategy = new double[strategySize];
+            for (int i = 0; i < strategySize; i++) {
+                strategy[i] = 1.0 / strategySize; // Initialize uniform distribution
+            }
+        }
+
+        // Update strategy based on payoff differences (best response dynamics)
+        public void updateStrategy(double[] payoffs) {
+            int bestAction = 0;
+            double maxPayoff = payoffs[0];
+            for (int i = 1; i < payoffs.length; i++) {
+                if (payoffs[i] > maxPayoff) {
+                    maxPayoff = payoffs[i];
+                    bestAction = i;
+                }
+            }
+            // Shift strategy toward best action
+            double learningRate = 0.1;
+            for (int i = 0; i < strategy.length; i++) {
+                strategy[i] *= (1 - learningRate);
+            }
+            strategy[bestAction] += learningRate;
+        }
+    }
+
+    // Simulates task allocation as a potential game
+    public static void main(String[] args) {
+        int numRobots = 5;
+        int numTasks = 3;
+        List robots = new ArrayList<>();
+
+        // Initialize robots with random strategies
+        for (int i = 0; i < numRobots; i++) {
+            robots.add(new Robot(i, numTasks));
+        }
+
+        // Game iterations
+        for (int iter = 0; iter < 100; iter++) {
+            // Calculate payoffs based on current strategy profile
+            for (Robot robot : robots) {
+                double[] payoffs = new double[numTasks];
+                // Simplified payoff: higher for less congested tasks
+                for (int task = 0; task < numTasks; task++) {
+                    double congestion = 0;
+                    for (Robot other : robots) {
+                        if (other != robot) {
+                            congestion += other.strategy[task];
+                        }
+                    }
+                    payoffs[task] = 1.0 / (1 + congestion); // Inverse congestion payoff
+                }
+                robot.updateStrategy(payoffs);
+            }
+        }
+
+        // Output final task allocations
+        for (Robot robot : robots) {
+            System.out.printf("Robot %d strategy: ", robot.id);
+            for (double prob : robot.strategy) {
+                System.out.printf("%.2f ", prob);
+            }
+            System.out.println();
+        }
+    }
+}
