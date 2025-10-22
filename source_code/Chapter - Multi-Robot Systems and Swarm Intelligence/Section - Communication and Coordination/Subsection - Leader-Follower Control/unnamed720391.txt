@@ -1,0 +1,61 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.spatial.distance import cdist
+
+class LeaderFollowerControl:
+    def __init__(self, num_robots=5, leader_index=0):
+        """Initialize multi-robot system with leader-follower structure."""
+        self.num_robots = num_robots
+        self.leader_index = leader_index
+        self.positions = np.random.rand(num_robots, 2) * 10  # Random initial positions
+        self.desired_distance = 1.5  # Desired inter-robot distance
+
+    def compute_control(self):
+        """Compute control inputs for followers based on leader's position."""
+        leader_pos = self.positions[self.leader_index]
+        control_inputs = np.zeros((self.num_robots, 2))  # dx, dy for each robot
+
+        for i in range(self.num_robots):
+            if i == self.leader_index:
+                continue  # Leader moves independently
+            
+            # Calculate vector to leader and distance
+            vec_to_leader = leader_pos - self.positions[i]
+            distance = np.linalg.norm(vec_to_leader)
+            
+            # Potential field-based control (attraction to leader)
+            if distance > self.desired_distance:
+                control_inputs[i] = 0.1 * vec_to_leader / distance  # Normalized
+
+        return control_inputs
+
+    def update_positions(self, control_inputs, leader_velocity=np.array([0.1, 0])):
+        """Update robot positions based on control inputs."""
+        # Leader moves with predefined velocity
+        self.positions[self.leader_index] += leader_velocity
+        
+        # Followers move according to control inputs
+        for i in range(self.num_robots):
+            if i != self.leader_index:
+                self.positions[i] += control_inputs[i]
+
+    def visualize(self):
+        """Visualize current robot positions."""
+        plt.scatter(self.positions[:, 0], self.positions[:, 1], c='b')
+        plt.scatter(self.positions[self.leader_index, 0], 
+                   self.positions[self.leader_index, 1], c='r', marker='*', s=200)
+        plt.title("Leader-Follower Formation")
+        plt.xlabel("X position")
+        plt.ylabel("Y position")
+        plt.grid(True)
+        plt.show()
+
+# Example usage
+if __name__ == "__main__":
+    lf_system = LeaderFollowerControl(num_robots=5)
+    
+    for _ in range(50):  # Simulation steps
+        controls = lf_system.compute_control()
+        lf_system.update_positions(controls)
+    
+    lf_system.visualize()
