@@ -1,0 +1,90 @@
+import gym
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from stable_baselines3 import PPO
+from stable_baselines3.common.env_util import make_vec_env
+
+# Custom neural network policy for locomotion control
+class LocomotionPolicy(nn.Module):
+    def __init__(self, observation_space, action_space):
+        super(LocomotionPolicy, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(observation_space.shape[0], 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, action_space.shape[0]),
+            nn.Tanh()  # Outputs actions in [-1, 1] range
+        )
+    
+    def forward(self, x):
+        return self.net(x)
+
+# Environment wrapper for legged robotics
+class LeggedRobotEnv(gym.Env):
+    def __init__(self):
+        super(LeggedRobotEnv, self).__init__()
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(28,))
+        self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(12,))
+        self.state = np.zeros(28)
+        self.max_steps = 1000
+        self.current_step = 0
+    
+    def reset(self):
+        self.state = np.random.normal(0, 0.1, size=28)
+        self.current_step = 0
+        return self.state.copy()
+    
+    def step(self, action):
+        # Simulate physics and update state (simplified)
+        self.state[:12] += action * 0.1  # Joint positions
+        self.state[12:24] = action * 2.0  # Joint velocities
+        self.state[24] += 0.1  # Forward progress
+        self.state[25] = np.sum(action**2)  # Energy cost
+        self.state[26] = np.abs(self.state[12:24]).mean()  # Stability metric
+        self.state[27] = np.random.normal(0, 0.01)  # Noise
+        
+        # Calculate rewards
+        forward_reward = self.state[24]
+        energy_penalty = -0.1 * self.state[25]
+        stability_bonus = 0.5 * (1.0 - self.state[26])
+        reward = forward_reward + energy_penalty + stability_bonus
+        
+        self.current_step += 1
+        done = self.current_step >= self.max_steps
+        
+        return self.state.copy(), reward, done, {}
+
+# Training setup
+def train_locomotion_policy():
+    # Create parallel environments
+    env = make_vec_env(LeggedRobotEnv, n_envs=8)
+    
+    # Initialize PPO with custom policy
+    policy_kwargs = dict(
+        activation_fn=torch.nn.ReLU,
+        net_arch=[dict(pi=[256, 128], vf=[256, 128])]
+    )
+    
+    model = PPO(
+        "MlpPolicy",
+        env,
+        policy_kwargs=policy_kwargs,
+        verbose=1,
+        n_steps=2048,
+        batch_size=64,
+        learning_rate=3e-4,
+        ent_coef=0.01,
+        device="cuda" if torch.cuda.is_available() else "cpu"
+    )
+    
+    # Train the agent
+    model.learn(total_timesteps=1_000_000)
+    
+    # Save the trained model
+    model.save("legged_robot_ppo")
+    
+if __name__ == "__main__":
+    train_locomotion_policy()
