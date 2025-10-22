@@ -1,0 +1,102 @@
+// BiohybridSpikingNeuralNetwork.java
+// Simulates a biohybrid spiking neural network for legged robotics control
+// Inspired by neuromorphic computing principles (Chapter 10: Bio-Inspired Robotics)
+
+import java.util.ArrayList;
+import java.util.HashMap;
+
+public class BiohybridSpikingNeuralNetwork {
+    // Neuromorphic core parameters
+    private static final double SPIKE_THRESHOLD = 1.0;
+    private static final double SYNAPTIC_DECAY = 0.95;
+    
+    // Biohybrid interface components
+    private ArrayList motorNeurons;
+    private HashMap sensoryInputs;
+    private LeggedRobotInterface robotInterface;
+
+    public BiohybridSpikingNeuralNetwork(LeggedRobotInterface robot) {
+        this.robotInterface = robot;
+        this.motorNeurons = new ArrayList<>();
+        this.sensoryInputs = new HashMap<>();
+        initializeNetwork();
+    }
+
+    private void initializeNetwork() {
+        // Central pattern generator (CPG) for rhythmic locomotion
+        Neuron flexorNeuron = new Neuron("flexor", 0.7);
+        Neuron extensorNeuron = new Neuron("extensor", 0.7);
+        
+        // Reciprocal inhibition (bio-inspired connectivity)
+        flexorNeuron.addSynapse(extensorNeuron, -0.5); 
+        extensorNeuron.addSynapse(flexorNeuron, -0.5);
+        
+        motorNeurons.add(flexorNeuron);
+        motorNeurons.add(extensorNeuron);
+    }
+
+    public void update(double deltaTime) {
+        // Process sensory feedback (biohybrid loop)
+        sensoryInputs = robotInterface.readSensors();
+        
+        // Neuromorphic computation
+        for (Neuron neuron : motorNeurons) {
+            // Integrate sensory inputs (emulating biological afferents)
+            double sensoryWeight = sensoryInputs.getOrDefault(neuron.id, 0.0);
+            neuron.integrateInput(sensoryWeight * deltaTime);
+            
+            // Check for spike event
+            if (neuron.membranePotential >= SPIKE_THRESHOLD) {
+                neuron.fireSpike();
+                executeMotorCommand(neuron);
+            }
+            
+            // Apply synaptic decay (emulating biological dynamics)
+            neuron.membranePotential *= SYNAPTIC_DECAY;
+        }
+    }
+
+    private void executeMotorCommand(Neuron neuron) {
+        // Convert spike event to robot action
+        if (neuron.id.equals("flexor")) {
+            robotInterface.activateJoint(0, 1.0); // Flexion
+        } else if (neuron.id.equals("extensor")) {
+            robotInterface.activateJoint(0, -1.0); // Extension
+        }
+    }
+
+    // Inner class representing a spiking neuron
+    private class Neuron {
+        String id;
+        double membranePotential;
+        HashMap synapses;
+        
+        public Neuron(String id, double initialPotential) {
+            this.id = id;
+            this.membranePotential = initialPotential;
+            this.synapses = new HashMap<>();
+        }
+        
+        public void addSynapse(Neuron target, double weight) {
+            synapses.put(target, weight);
+        }
+        
+        public void integrateInput(double input) {
+            membranePotential += input;
+        }
+        
+        public void fireSpike() {
+            membranePotential = 0; // Reset after spike
+            // Propagate to connected neurons
+            for (Neuron target : synapses.keySet()) {
+                target.integrateInput(synapses.get(target));
+            }
+        }
+    }
+}
+
+// Interface for legged robot control (biohybrid bridge)
+interface LeggedRobotInterface {
+    HashMap readSensors();
+    void activateJoint(int jointId, double activation);
+}
