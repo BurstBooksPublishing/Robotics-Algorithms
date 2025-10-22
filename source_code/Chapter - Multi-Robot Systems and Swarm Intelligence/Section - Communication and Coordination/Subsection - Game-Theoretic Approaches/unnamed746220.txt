@@ -1,0 +1,71 @@
+import numpy as np
+from scipy.optimize import minimize
+
+class GameTheoreticCoordinator:
+    """A game-theoretic approach to multi-robot coordination."""
+    
+    def __init__(self, num_robots, action_space):
+        """
+        Initialize the coordinator with robots and action space.
+        
+        Args:
+            num_robots (int): Number of robots in the system
+            action_space (list): Discrete action space for each robot
+        """
+        self.num_robots = num_robots
+        self.action_space = action_space
+        self.payoff_matrix = np.random.rand(num_robots, len(action_space))  # Simulated payoff matrix
+
+    def compute_nash_equilibrium(self):
+        """Compute mixed-strategy Nash equilibrium using optimization."""
+        # Objective function: minimize deviation from best response
+        def objective(x):
+            x = x.reshape((self.num_robots, len(self.action_space)))
+            deviation = 0
+            for i in range(self.num_robots):
+                others_strategy = np.prod(np.delete(x, i, axis=0), axis=0)
+                best_response = np.argmax(self.payoff_matrix[i] * others_strategy)
+                deviation += np.sum((x[i] - np.eye(len(self.action_space))[best_response])**2)
+            return deviation
+
+        # Constraints: probabilities must sum to 1 for each robot
+        constraints = [{'type': 'eq', 'fun': lambda x: np.sum(x.reshape(
+            (self.num_robots, len(self.action_space)))[i]) - 1} for i in range(self.num_robots)]
+        
+        # Bounds: probabilities between 0 and 1
+        bounds = [(0, 1) for _ in range(self.num_robots * len(self.action_space))]
+        
+        # Initial guess: uniform distribution
+        x0 = np.ones(self.num_robots * len(self.action_space)) / len(self.action_space)
+        
+        # Solve the optimization problem
+        result = minimize(objective, x0, bounds=bounds, constraints=constraints)
+        return result.x.reshape((self.num_robots, len(self.action_space)))
+
+    def decentralized_decision(self, robot_id, current_strategies):
+        """
+        Individual robot's best response given others' strategies.
+        
+        Args:
+            robot_id (int): ID of the current robot
+            current_strategies (np.array): Current strategies of all robots
+        Returns:
+            int: Index of the best action in action_space
+        """
+        others_strategy = np.prod(np.delete(current_strategies, robot_id, axis=0), axis=0)
+        return np.argmax(self.payoff_matrix[robot_id] * others_strategy)
+
+# Example usage
+if __name__ == "__main__":
+    coordinator = GameTheoreticCoordinator(
+        num_robots=3,
+        action_space=['move_forward', 'turn_left', 'turn_right', 'wait']
+    )
+    
+    # Compute Nash equilibrium
+    equilibrium = coordinator.compute_nash_equilibrium()
+    print("Nash equilibrium strategies:\n", equilibrium)
+    
+    # Simulate decentralized decision for robot 0
+    best_action_idx = coordinator.decentralized_decision(0, equilibrium)
+    print(f"Robot 0's best action: {coordinator.action_space[best_action_idx]}")
