@@ -1,0 +1,66 @@
+import org.ros.namespace.GraphName;
+import org.ros.node.AbstractNodeMain;
+import org.ros.node.ConnectedNode;
+import org.ros.node.topic.Publisher;
+import moveit_msgs.MotionPlanRequest;
+import moveit_msgs.MotionPlanResponse;
+import moveit_msgs.PlanningScene;
+import moveit_msgs.RobotState;
+
+/**
+ * Advanced MoveIt! motion planning implementation in ROS (Robot Operating System).
+ * Demonstrates motion planning for robotic arm using MoveIt! APIs.
+ */
+public class MoveItMotionPlanner extends AbstractNodeMain {
+    private Publisher planRequestPub;
+    private Publisher scenePub;
+
+    @Override
+    public GraphName getDefaultNodeName() {
+        return GraphName.of("moveit_motion_planner");
+    }
+
+    @Override
+    public void onStart(ConnectedNode connectedNode) {
+        // Initialize publishers for motion planning
+        planRequestPub = connectedNode.newPublisher("/move_group/motion_plan_request", 
+            MotionPlanRequest._TYPE);
+        scenePub = connectedNode.newPublisher("/planning_scene", PlanningScene._TYPE);
+
+        // Create a motion plan request
+        MotionPlanRequest request = planRequestPub.newMessage();
+        request.setGroupName("manipulator");  // Specify robot arm group
+        request.setNumPlanningAttempts(5);    // Set retry attempts
+        request.setAllowedPlanningTime(2.0);  // Timeout in seconds
+
+        // Set start state (current robot state)
+        RobotState startState = connectedNode.getTopicMessageFactory()
+            .newFromType(RobotState._TYPE);
+        request.setStartState(startState);
+
+        // Set goal constraints (example: joint space goal)
+        // ... (constraint setup code would go here)
+
+        // Publish the planning request
+        planRequestPub.publish(request);
+
+        // Setup planning scene if needed
+        PlanningScene scene = scenePub.newMessage();
+        // ... (scene configuration code would go here)
+        scenePub.publish(scene);
+    }
+
+    /**
+     * Callback for processing motion plan responses
+     */
+    public void handlePlanResponse(MotionPlanResponse response) {
+        if (response.getErrorCode().getVal() == response.getErrorCode().SUCCESS) {
+            // Process successful trajectory
+            // ... (trajectory execution code would go here)
+        } else {
+            // Handle planning failure
+            System.err.println("Planning failed with error code: " + 
+                response.getErrorCode().getVal());
+        }
+    }
+}
