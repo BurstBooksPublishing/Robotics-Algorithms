@@ -1,0 +1,76 @@
+import numpy as np
+import rospy
+from nav_msgs.msg import OccupancyGrid
+from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import Header
+import threading
+import networkx as nx
+from collections import defaultdict
+
+class DistributedSLAM:
+    def __init__(self, robot_id, num_robots):
+        self.robot_id = robot_id
+        self.num_robots = num_robots
+        self.local_map = OccupancyGrid()  # Local occupancy grid map
+        self.robot_poses = defaultdict(dict)  # Stores poses of all robots
+        self.communication_graph = nx.Graph()  # Graph for inter-robot communication
+        self.lock = threading.Lock()  # Thread lock for shared data
+
+        # Initialize ROS publishers/subscribers
+        self.map_pub = rospy.Publisher(f'/robot_{robot_id}/local_map', OccupancyGrid, queue_size=10)
+        self.pose_pub = rospy.Publisher(f'/robot_{robot_id}/pose', PoseStamped, queue_size=10)
+        rospy.Subscriber('/shared_maps', OccupancyGrid, self.map_callback)
+        rospy.Subscriber('/shared_poses', PoseStamped, self.pose_callback)
+
+    def map_callback(self, msg):
+        """Merge received map into local map using consensus-based fusion."""
+        with self.lock:
+            # Simple weighted average for map fusion (can be replaced with more advanced methods)
+            self.local_map.data = np.array(self.local_map.data) * 0.7 + np.array(msg.data) * 0.3
+
+    def pose_callback(self, msg):
+        """Update pose information from other robots."""
+        with self.lock:
+            sender_id = int(msg.header.frame_id)
+            self.robot_poses[sender_id] = msg.pose
+
+    def run_consensus(self):
+        """Perform distributed consensus on map and pose estimates."""
+        while not rospy.is_shutdown():
+            # Publish local map and pose for other robots
+            header = Header()
+            header.frame_id = str(self.robot_id)
+            
+            map_msg = OccupancyGrid()
+            map_msg.header = header
+            map_msg.data = self.local_map.data
+            self.map_pub.publish(map_msg)
+            
+            pose_msg = PoseStamped()
+            pose_msg.header = header
+            pose_msg.pose = self.get_current_pose()  # Assume this method exists
+            self.pose_pub.publish(pose_msg)
+            
+            # Perform periodic map optimization (simplified)
+            self.optimize_maps()
+            rospy.sleep(1.0)  # Adjust frequency as needed
+
+    def optimize_maps(self):
+        """Optimize local map using information from other robots."""
+        with self.lock:
+            # Simplified optimization - in practice would use pose graph optimization
+            for rid, pose in self.robot_poses.items():
+                if rid != self.robot_id:
+                    # Apply relative transform based on shared poses
+                    pass  # Implementation would use actual transform math
+
+    def get_current_pose(self):
+        """Get current robot pose (placeholder - would use actual odometry/SLAM)."""
+        return PoseStamped().pose  # Return dummy pose for illustration
+
+if __name__ == '__main__':
+    rospy.init_node('distributed_slam')
+    robot_id = int(rospy.get_param('~robot_id'))
+    num_robots = int(rospy.get_param('~num_robots'))
+    dslam = DistributedSLAM(robot_id, num_robots)
+    dslam.run_consensus()
