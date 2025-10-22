@@ -1,0 +1,31 @@
+import numpy as np
+from hmmlearn import hmm
+
+# Define HMM parameters for speech recognition
+n_components = 5  # Number of hidden states (e.g., phonemes)
+n_features = 13   # MFCC features per frame
+
+# Initialize Gaussian HMM
+model = hmm.GaussianHMM(
+    n_components=n_components,
+    covariance_type="diag",  # Diagonal covariance matrix
+    n_iter=100,              # Max iterations for EM algorithm
+    verbose=True             # Print convergence logs
+)
+
+# Simulate training data (MFCC features from speech samples)
+# In practice, load preprocessed MFCCs from audio files
+np.random.seed(42)
+X_train = np.random.randn(100, n_features)  # 100 frames of 13D MFCCs
+lengths = [100]  # Single utterance of 100 frames
+
+# Train HMM using Baum-Welch algorithm
+model.fit(X_train, lengths)
+
+# Speech recognition inference (Viterbi decoding)
+test_sample = np.random.randn(50, n_features)  # New utterance
+log_prob, state_sequence = model.decode(test_sample)
+
+# Output results
+print(f"Log probability of observation: {log_prob:.2f}")
+print(f"Most likely state sequence: {state_sequence}")
