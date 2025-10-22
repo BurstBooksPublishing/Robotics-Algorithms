@@ -1,0 +1,76 @@
+import numpy as np
+import rospy
+from sensor_msgs.msg import JointState
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+
+class ProstheticController:
+    """A controller for robotic prosthetics with adaptive grasping algorithms."""
+    
+    def __init__(self, limb_type='arm'):
+        rospy.init_node('prosthetic_controller', anonymous=True)
+        self.limb_type = limb_type
+        self.joint_names = self._get_joint_names(limb_type)
+        self.trajectory_pub = rospy.Publisher('/prosthetic_joint_trajectory', JointTrajectory, queue_size=10)
+        
+        # Load grasp presets (e.g., power, precision, pinch)
+        self.grasp_presets = self._load_grasp_presets()
+        
+        # Adaptive control parameters
+        self.force_threshold = 5.0  # Newtons
+        self.slip_threshold = 0.01  # m/s (object slip detection)
+        
+    def _get_joint_names(self, limb_type):
+        """Return joint names based on prosthetic limb type."""
+        if limb_type == 'arm':
+            return ['shoulder_pitch', 'shoulder_roll', 'elbow_flex', 
+                    'wrist_pronation', 'wrist_flex', 'hand_close']
+        elif limb_type == 'leg':
+            return ['hip_flexion', 'hip_abduction', 'knee', 'ankle']
+        else:
+            raise ValueError("Invalid limb type specified")
+
+    def _load_grasp_presets(self):
+        """Load predefined joint angles for common grasps."""
+        return {
+            'power_grasp': [0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            'precision_grasp': [0.0, 0.0, 0.0, 0.0, 0.0, 0.5],
+            'pinch_grasp': [0.0, 0.0, 0.0, 0.5, 0.0, 0.3]
+        }
+
+    def execute_grasp(self, grasp_type, object_force=None):
+        """Execute a predefined grasp with force adaptation."""
+        if grasp_type not in self.grasp_presets:
+            rospy.logerr(f"Unknown grasp type: {grasp_type}")
+            return False
+            
+        trajectory = JointTrajectory()
+        trajectory.joint_names = self.joint_names
+        point = JointTrajectoryPoint()
+        
+        # Set target positions from presets
+        point.positions = self.grasp_presets[grasp_type]
+        
+        # Adaptive force control if object force data is available
+        if object_force is not None:
+            if object_force > self.force_threshold:
+                point.effort = [10.0] * len(self.joint_names)  # Increase grip force
+            else:
+                point.effort = [5.0] * len(self.joint_names)   # Default grip force
+        
+        point.time_from_start = rospy.Duration(2.0)  # 2 second movement
+        trajectory.points.append(point)
+        self.trajectory_pub.publish(trajectory)
+        return True
+
+    def detect_slip(self, current_velocities):
+        """Monitor joint velocities to detect object slip."""
+        wrist_velocity = current_velocities[-1]  # Last joint is typically hand
+        return abs(wrist_velocity) > self.slip_threshold
+
+if __name__ == "__main__":
+    pc = ProstheticController(limb_type='arm')
+    try:
+        # Example usage: execute power grasp with force adaptation
+        pc.execute_grasp('power_grasp', object_force=6.0)
+    except rospy.ROSInterruptException:
+        pass
