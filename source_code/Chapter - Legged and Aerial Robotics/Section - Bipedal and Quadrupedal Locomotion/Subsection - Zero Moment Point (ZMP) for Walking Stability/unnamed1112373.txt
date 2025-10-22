@@ -1,0 +1,66 @@
+/**
+ * Zero Moment Point (ZMP) calculation for bipedal walking stability.
+ * This class computes the ZMP based on the robot's center of mass (CoM)
+ * and ground reaction forces (GRFs) to ensure dynamic balance.
+ */
+public class ZMPCalculator {
+    private double[] comPosition;  // Center of Mass (CoM) position [x, y, z]
+    private double[] comAcceleration;  // CoM acceleration [ax, ay, az]
+    private double totalMass;  // Total mass of the robot (kg)
+    private double gravity = 9.81;  // Gravitational acceleration (m/s^2)
+
+    /**
+     * Constructor initializes the ZMP calculator with robot parameters.
+     * @param comPosition Initial CoM position.
+     * @param totalMass Total mass of the robot.
+     */
+    public ZMPCalculator(double[] comPosition, double totalMass) {
+        this.comPosition = comPosition;
+        this.totalMass = totalMass;
+        this.comAcceleration = new double[]{0, 0, 0};
+    }
+
+    /**
+     * Updates the CoM acceleration for dynamic ZMP calculation.
+     * @param comAcceleration New CoM acceleration vector.
+     */
+    public void updateCoMAcceleration(double[] comAcceleration) {
+        this.comAcceleration = comAcceleration;
+    }
+
+    /**
+     * Computes the Zero Moment Point (ZMP) in the x-y plane.
+     * @return ZMP coordinates [x, y] where the net moment is zero.
+     */
+    public double[] calculateZMP() {
+        double zmpX = comPosition[0] - (comPosition[2] * comAcceleration[0]) / 
+                      (gravity + comAcceleration[2]);
+        double zmpY = comPosition[1] - (comPosition[2] * comAcceleration[1]) / 
+                      (gravity + comAcceleration[2]);
+
+        return new double[]{zmpX, zmpY};
+    }
+
+    /**
+     * Checks if the ZMP is within the support polygon for stability.
+     * @param supportPolygon List of vertices defining the support polygon.
+     * @param zmp The computed ZMP coordinates.
+     * @return True if ZMP is inside the support polygon, false otherwise.
+     */
+    public boolean isStable(double[][] supportPolygon, double[] zmp) {
+        // Implement polygon inclusion test (e.g., ray casting algorithm)
+        // Simplified placeholder for demonstration
+        double minX = Double.MAX_VALUE, maxX = Double.MIN_VALUE;
+        double minY = Double.MAX_VALUE, maxY = Double.MIN_VALUE;
+
+        for (double[] vertex : supportPolygon) {
+            minX = Math.min(minX, vertex[0]);
+            maxX = Math.max(maxX, vertex[0]);
+            minY = Math.min(minY, vertex[1]);
+            maxY = Math.max(maxY, vertex[1]);
+        }
+
+        return (zmp[0] >= minX && zmp[0] <= maxX && 
+                zmp[1] >= minY && zmp[1] <= maxY);
+    }
+}
