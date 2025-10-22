@@ -1,0 +1,79 @@
+import numpy as np
+from collections import defaultdict
+
+class AuctionBasedTaskAllocation:
+    """Auction-based task allocation for multi-robot systems."""
+    
+    def __init__(self, robots, tasks):
+        """
+        Initialize with robots and tasks.
+        Args:
+            robots: List of robot IDs.
+            tasks: List of task IDs with associated values.
+        """
+        self.robots = robots
+        self.tasks = tasks
+        self.bids = defaultdict(dict)
+        self.allocations = {}
+
+    def compute_bids(self):
+        """Compute bids for each robot-task pair (simulated)."""
+        for robot in self.robots:
+            for task, value in self.tasks.items():
+                # Simulate bid as inverse of distance (placeholder logic)
+                self.bids[robot][task] = np.random.uniform(0.1, 1.0) * value
+
+    def run_auction(self):
+        """Conduct a single-round auction to allocate tasks."""
+        for task in self.tasks:
+            max_bid = -1
+            winner = None
+            for robot in self.robots:
+                if self.bids[robot][task] > max_bid:
+                    max_bid = self.bids[robot][task]
+                    winner = robot
+            if winner:
+                self.allocations[task] = winner
+
+    def get_allocations(self):
+        """Return the final task allocations."""
+        return self.allocations
+
+
+class MarketBasedTaskAllocation:
+    """Market-based task allocation using contract net protocol."""
+    
+    def __init__(self, robots, tasks):
+        """
+        Initialize with robots and tasks.
+        Args:
+            robots: Dict of robot IDs and their capabilities.
+            tasks: Dict of task IDs and requirements.
+        """
+        self.robots = robots
+        self.tasks = tasks
+        self.contracts = {}
+
+    def announce_tasks(self):
+        """Announce tasks to robots (simulated)."""
+        for task, req in self.tasks.items():
+            for robot, capabilities in self.robots.items():
+                # Simulate task suitability (placeholder logic)
+                if self._check_suitability(capabilities, req):
+                    self.contracts.setdefault(task, []).append(robot)
+
+    def _check_suitability(self, capabilities, req):
+        """Check if robot capabilities meet task requirements."""
+        return all(capabilities.get(k, 0) >= v for k, v in req.items())
+
+    def award_contracts(self):
+        """Award contracts to best-suited robots."""
+        allocations = {}
+        for task, candidates in self.contracts.items():
+            if candidates:
+                # Select robot with highest capability score (simplified)
+                allocations[task] = max(
+                    candidates, 
+                    key=lambda x: sum(self.robots[x].values())
+                )
+        return allocations
