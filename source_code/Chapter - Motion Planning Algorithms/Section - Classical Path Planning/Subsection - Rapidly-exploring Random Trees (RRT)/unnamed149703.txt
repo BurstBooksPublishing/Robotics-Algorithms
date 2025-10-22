@@ -1,0 +1,80 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+
+class RRT:
+    def __init__(self, start, goal, bounds, obstacles, step_size=0.5, max_iter=1000):
+        self.start = np.array(start)
+        self.goal = np.array(goal)
+        self.bounds = bounds  # [(x_min, x_max), (y_min, y_max)]
+        self.step_size = step_size
+        self.max_iter = max_iter
+        self.obstacles = obstacles  # List of Rectangle objects
+        self.tree = {tuple(start): None}  # Nodes stored as tuples with parent reference
+
+    def generate_random_point(self):
+        """Sample a random point within bounds."""
+        x = np.random.uniform(self.bounds[0][0], self.bounds[0][1])
+        y = np.random.uniform(self.bounds[1][0], self.bounds[1][1])
+        return np.array([x, y])
+
+    def nearest_neighbor(self, point):
+        """Find the nearest node in the tree to the given point."""
+        nodes = np.array(list(self.tree.keys()))
+        distances = np.linalg.norm(nodes - point, axis=1)
+        nearest_idx = np.argmin(distances)
+        return nodes[nearest_idx]
+
+    def steer(self, from_point, to_point):
+        """Move from 'from_point' towards 'to_point' by step_size."""
+        direction = to_point - from_point
+        distance = np.linalg.norm(direction)
+        if distance <= self.step_size:
+            return to_point
+        return from_point + (direction / distance) * self.step_size
+
+    def collision_free(self, point1, point2):
+        """Check if the path between two points is obstacle-free."""
+        for obstacle in self.obstacles:
+            if self.line_intersects_rectangle(point1, point2, obstacle):
+                return False
+        return True
+
+    def line_intersects_rectangle(self, p1, p2, rect):
+        """Check if line segment p1-p2 intersects with rectangle."""
+        # Implement line-rectangle intersection logic (omitted for brevity)
+        return False  # Placeholder for actual implementation
+
+    def build_rrt(self):
+        """Construct the RRT until goal is reached or max_iter is hit."""
+        for _ in range(self.max_iter):
+            rand_point = self.generate_random_point()
+            nearest = self.nearest_neighbor(rand_point)
+            new_point = self.steer(nearest, rand_point)
+
+            if self.collision_free(nearest, new_point):
+                self.tree[tuple(new_point)] = tuple(nearest)
+                
+                # Check if goal is reachable from new_point
+                if np.linalg.norm(new_point - self.goal) < self.step_size:
+                    if self.collision_free(new_point, self.goal):
+                        self.tree[tuple(self.goal)] = tuple(new_point)
+                        return True
+        return False
+
+    def get_path(self):
+        """Retrieve the path from start to goal if found."""
+        path = []
+        current = tuple(self.goal)
+        while current is not None:
+            path.append(current)
+            current = self.tree[current]
+        return path[::-1]  # Reverse to get start-to-goal
+
+# Example usage
+if __name__ == "__main__":
+    bounds = [(0, 10), (0, 10)]
+    obstacles = [Rectangle((2, 2), 2, 2), Rectangle((6, 6), 2, 2)]
+    rrt = RRT(start=[1, 1], goal=[9, 9], bounds=bounds, obstacles=obstacles)
+    success = rrt.build_rrt()
+    path = rrt.get_path() if success else []
