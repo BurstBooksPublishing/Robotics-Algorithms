@@ -1,0 +1,53 @@
+import heapq
+
+def dijkstra(graph, start, goal):
+    """
+    Dijkstra's Algorithm for finding the shortest path in a weighted graph.
+    Args:
+        graph: Adjacency list representation of the graph {node: {neighbor: cost}}
+        start: Starting node
+        goal: Target node
+    Returns:
+        path: List of nodes representing the shortest path
+        cost: Total cost of the path
+    """
+    # Priority queue: (cumulative_cost, current_node, path_so_far)
+    priority_queue = [(0, start, [start])]
+    visited = set()
+
+    while priority_queue:
+        current_cost, current_node, path = heapq.heappop(priority_queue)
+
+        if current_node == goal:
+            return path, current_cost  # Path found
+
+        if current_node in visited:
+            continue  # Skip already processed nodes
+
+        visited.add(current_node)
+
+        # Explore neighbors
+        for neighbor, edge_cost in graph.get(current_node, {}).items():
+            if neighbor not in visited:
+                new_cost = current_cost + edge_cost
+                new_path = path + [neighbor]
+                heapq.heappush(priority_queue, (new_cost, neighbor, new_path))
+
+    return [], float('inf')  # No path exists
+
+# Example usage (Robot navigation graph)
+if __name__ == "__main__":
+    # Graph: Nodes represent waypoints, edges represent traversable paths with costs
+    nav_graph = {
+        'A': {'B': 1, 'C': 4},
+        'B': {'A': 1, 'C': 2, 'D': 5},
+        'C': {'A': 4, 'B': 2, 'D': 1},
+        'D': {'B': 5, 'C': 1}
+    }
+
+    start_node = 'A'
+    goal_node = 'D'
+    path, cost = dijkstra(nav_graph, start_node, goal_node)
+
+    print(f"Shortest path: {path}")
+    print(f"Total cost: {cost}")
