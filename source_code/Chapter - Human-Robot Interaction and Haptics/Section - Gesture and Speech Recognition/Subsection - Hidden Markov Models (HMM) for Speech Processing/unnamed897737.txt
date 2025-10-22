@@ -1,0 +1,146 @@
+import java.util.*;
+
+/**
+ * A simplified HMM implementation for speech processing in robotics.
+ * Focuses on gesture/speech recognition for human-robot interaction.
+ */
+public class HMMSpeechProcessor {
+    private int numStates;          // Number of hidden states
+    private int numObservations;    // Number of possible observations
+    private double[][] transition;  // State transition probabilities
+    private double[][] emission;    // Observation emission probabilities
+    private double[] initial;       // Initial state probabilities
+
+    public HMMSpeechProcessor(int states, int observations) {
+        this.numStates = states;
+        this.numObservations = observations;
+        this.transition = new double[states][states];
+        this.emission = new double[states][observations];
+        this.initial = new double[states];
+        initializeRandomProbabilities();
+    }
+
+    // Initialize with random probabilities (normalized)
+    private void initializeRandomProbabilities() {
+        Random rand = new Random();
+        
+        // Initialize transition matrix
+        for (int i = 0; i < numStates; i++) {
+            double sum = 0;
+            for (int j = 0; j < numStates; j++) {
+                transition[i][j] = rand.nextDouble();
+                sum += transition[i][j];
+            }
+            // Normalize
+            for (int j = 0; j < numStates; j++) {
+                transition[i][j] /= sum;
+            }
+        }
+
+        // Initialize emission matrix
+        for (int i = 0; i < numStates; i++) {
+            double sum = 0;
+            for (int j = 0; j < numObservations; j++) {
+                emission[i][j] = rand.nextDouble();
+                sum += emission[i][j];
+            }
+            // Normalize
+            for (int j = 0; j < numObservations; j++) {
+                emission[i][j] /= sum;
+            }
+        }
+
+        // Initialize initial probabilities
+        double sum = 0;
+        for (int i = 0; i < numStates; i++) {
+            initial[i] = rand.nextDouble();
+            sum += initial[i];
+        }
+        // Normalize
+        for (int i = 0; i < numStates; i++) {
+            initial[i] /= sum;
+        }
+    }
+
+    /**
+     * Viterbi algorithm for finding most likely state sequence
+     * @param observations Sequence of observed speech features
+     * @return Most likely state sequence
+     */
+    public int[] viterbiDecode(int[] observations) {
+        int T = observations.length;
+        double[][] viterbi = new double[numStates][T];
+        int[][] path = new int[numStates][T];
+
+        // Initialize first column
+        for (int s = 0; s < numStates; s++) {
+            viterbi[s][0] = initial[s] * emission[s][observations[0]];
+            path[s][0] = s;
+        }
+
+        // Forward pass
+        for (int t = 1; t < T; t++) {
+            for (int s = 0; s < numStates; s++) {
+                double maxProb = -1;
+                int bestState = -1;
+                
+                for (int prev = 0; prev < numStates; prev++) {
+                    double prob = viterbi[prev][t-1] * transition[prev][s] 
+                                * emission[s][observations[t]];
+                    if (prob > maxProb) {
+                        maxProb = prob;
+                        bestState = prev;
+                    }
+                }
+                
+                viterbi[s][t] = maxProb;
+                System.arraycopy(path[bestState], 0, path[s], 0, t);
+                path[s][t] = s;
+            }
+        }
+
+        // Find most probable final state
+        double maxProb = -1;
+        int bestState = -1;
+        for (int s = 0; s < numStates; s++) {
+            if (viterbi[s][T-1] > maxProb) {
+                maxProb = viterbi[s][T-1];
+                bestState = s;
+            }
+        }
+
+        return path[bestState];
+    }
+
+    /**
+     * Forward algorithm for calculating observation sequence probability
+     */
+    public double forwardAlgorithm(int[] observations) {
+        int T = observations.length;
+        double[][] forward = new double[numStates][T];
+
+        // Initialize
+        for (int s = 0; s < numStates; s++) {
+            forward[s][0] = initial[s] * emission[s][observations[0]];
+        }
+
+        // Recursion
+        for (int t = 1; t < T; t++) {
+            for (int s = 0; s < numStates; s++) {
+                forward[s][t] = 0;
+                for (int prev = 0; prev < numStates; prev++) {
+                    forward[s][t] += forward[prev][t-1] * transition[prev][s];
+                }
+                forward[s][t] *= emission[s][observations[t]];
+            }
+        }
+
+        // Termination
+        double prob = 0;
+        for (int s = 0; s < numStates; s++) {
+            prob += forward[s][T-1];
+        }
+
+        return prob;
+    }
+}
