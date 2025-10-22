@@ -1,0 +1,112 @@
+import java.util.ArrayList;
+import java.util.Random;
+
+/**
+ * A simple policy search implementation using evolutionary strategies
+ * for robotic control in a simulated environment.
+ */
+public class EvolutionaryPolicySearch {
+    private static final int POPULATION_SIZE = 50;
+    private static final int MAX_GENERATIONS = 100;
+    private static final double MUTATION_RATE = 0.1;
+    private static final double CROSSOVER_RATE = 0.7;
+
+    // Represents a policy (neural network weights for robotic control)
+    static class Policy {
+        double[] weights;
+        double fitness;
+
+        Policy(int weightCount) {
+            this.weights = new double[weightCount];
+            Random rand = new Random();
+            for (int i = 0; i < weightCount; i++) {
+                weights[i] = rand.nextGaussian(); // Initialize with random weights
+            }
+        }
+
+        // Mutate weights with small random changes
+        void mutate() {
+            Random rand = new Random();
+            for (int i = 0; i < weights.length; i++) {
+                if (rand.nextDouble() < MUTATION_RATE) {
+                    weights[i] += rand.nextGaussian() * 0.1; // Small mutation
+                }
+            }
+        }
+    }
+
+    // Evaluate policy fitness (simplified for example)
+    private static double evaluatePolicy(Policy policy) {
+        double fitness = 0;
+        // Simulate policy execution and calculate fitness
+        // (e.g., distance traveled, task completion)
+        for (double weight : policy.weights) {
+            fitness += Math.abs(weight); // Example fitness metric
+        }
+        return fitness;
+    }
+
+    // Tournament selection
+    private static Policy selectParent(ArrayList population) {
+        Random rand = new Random();
+        Policy best = population.get(rand.nextInt(population.size()));
+        for (int i = 0; i < 3; i++) { // Tournament size of 3
+            Policy candidate = population.get(rand.nextInt(population.size()));
+            if (candidate.fitness > best.fitness) {
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
+    // Single-point crossover
+    private static Policy crossover(Policy parent1, Policy parent2) {
+        Policy child = new Policy(parent1.weights.length);
+        Random rand = new Random();
+        if (rand.nextDouble() < CROSSOVER_RATE) {
+            int point = rand.nextInt(parent1.weights.length);
+            for (int i = 0; i < point; i++) {
+                child.weights[i] = parent1.weights[i];
+            }
+            for (int i = point; i < parent2.weights.length; i++) {
+                child.weights[i] = parent2.weights[i];
+            }
+        } else {
+            System.arraycopy(parent1.weights, 0, child.weights, 0, parent1.weights.length);
+        }
+        return child;
+    }
+
+    public static void main(String[] args) {
+        int policySize = 10; // Number of weights in the policy
+        ArrayList population = new ArrayList<>();
+
+        // Initialize population
+        for (int i = 0; i < POPULATION_SIZE; i++) {
+            population.add(new Policy(policySize));
+        }
+
+        // Evolutionary loop
+        for (int gen = 0; gen < MAX_GENERATIONS; gen++) {
+            // Evaluate all policies
+            for (Policy p : population) {
+                p.fitness = evaluatePolicy(p);
+            }
+
+            // Create new generation
+            ArrayList newPopulation = new ArrayList<>();
+            for (int i = 0; i < POPULATION_SIZE; i++) {
+                // Selection and variation
+                Policy parent1 = selectParent(population);
+                Policy parent2 = selectParent(population);
+                Policy child = crossover(parent1, parent2);
+                child.mutate();
+                newPopulation.add(child);
+            }
+
+            population = newPopulation;
+            System.out.println("Generation " + gen + " best fitness: " + 
+                population.stream().mapToDouble(p -> p.fitness).max().orElse(0));
+        }
+    }
+}
