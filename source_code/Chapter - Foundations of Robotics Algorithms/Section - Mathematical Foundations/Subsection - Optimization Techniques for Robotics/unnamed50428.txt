@@ -1,0 +1,45 @@
+/**
+ * A JAVA implementation of Gradient Descent for robotic path optimization.
+ * This aligns with Chapter 1: Foundations of Robotics Algorithms, Section: Mathematical Foundations.
+ */
+public class GradientDescentOptimizer {
+    private static final double LEARNING_RATE = 0.01;
+    private static final int MAX_ITERATIONS = 1000;
+    private static final double TOLERANCE = 1e-6;
+
+    /**
+     * Computes the gradient of a robotic path cost function (simplified quadratic example).
+     * @param x Current position parameter
+     * @return Gradient value at x
+     */
+    private static double computeGradient(double x) {
+        return 2 * x - 4; // Derivative of f(x) = (x-2)^2
+    }
+
+    /**
+     * Performs gradient descent to minimize the cost function.
+     * @param initialX Starting position
+     * @return Optimized position
+     */
+    public static double optimizePath(double initialX) {
+        double x = initialX;
+        double prevCost = Double.MAX_VALUE;
+
+        for (int i = 0; i < MAX_ITERATIONS; i++) {
+            double gradient = computeGradient(x);
+            x -= LEARNING_RATE * gradient; // Update position
+
+            double currentCost = Math.pow(x - 2, 2); // Compute current cost
+            if (Math.abs(prevCost - currentCost) < TOLERANCE) {
+                break; // Convergence check
+            }
+            prevCost = currentCost;
+        }
+        return x;
+    }
+
+    public static void main(String[] args) {
+        double optimizedX = optimizePath(10.0); // Start from arbitrary position
+        System.out.println("Optimized position: " + optimizedX);
+    }
+}
