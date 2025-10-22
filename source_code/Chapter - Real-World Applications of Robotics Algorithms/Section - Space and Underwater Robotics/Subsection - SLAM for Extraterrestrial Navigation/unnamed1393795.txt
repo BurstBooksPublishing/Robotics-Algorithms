@@ -1,0 +1,173 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.spatial import KDTree
+from sklearn.cluster import DBSCAN
+
+class ExtraterrestrialSLAM:
+    def __init__(self, lidar_range=10.0, map_resolution=0.1):
+        """Initialize SLAM system for extraterrestrial navigation.
+        
+        Args:
+            lidar_range (float): Max detection range of LiDAR (meters)
+            map_resolution (float): Grid resolution for occupancy map (meters/cell)
+        """
+        self.lidar_range = lidar_range
+        self.map_resolution = map_resolution
+        self.occupancy_map = None
+        self.robot_pose = np.zeros(3)  # [x, y, theta]
+        self.landmarks = []
+        self.landmark_tree = None
+        
+    def process_lidar_scan(self, scan_data):
+        """Process LiDAR scan and update map/landmarks.
+        
+        Args:
+            scan_data (np.array): Array of LiDAR distance measurements
+        """
+        # Convert polar to Cartesian coordinates (relative to robot)
+        angles = np.linspace(0, 2*np.pi, len(scan_data))
+        x = scan_data * np.cos(angles)
+        y = scan_data * np.sin(angles)
+        
+        # Filter out invalid measurements beyond lidar range
+        valid = scan_data < self.lidar_range
+        points = np.column_stack((x[valid], y[valid]))
+        
+        # Transform to world coordinates
+        world_points = self._transform_to_world(points)
+        
+        # Cluster points to identify landmarks (rocks, craters, etc.)
+        clusters = DBSCAN(eps=0.5, min_samples=3).fit(world_points)
+        
+        # Update landmark database
+        for label in set(clusters.labels_):
+            if label == -1:  # Skip noise
+                continue
+            cluster_points = world_points[clusters.labels_ == label]
+            landmark_pos = np.mean(cluster_points, axis=0)
+            self._update_landmarks(landmark_pos)
+            
+        # Update occupancy grid map
+        self._update_occupancy_map(world_points)
+        
+    def _transform_to_world(self, points):
+        """Transform points from robot frame to world frame."""
+        rot_mat = np.array([
+
+import java.util.*;
+
+/**
+ * Simulates SLAM (Simultaneous Localization and Mapping) for extraterrestrial navigation.
+ * Uses particle filters and landmark detection to map unknown planetary surfaces.
+ */
+public class ExtraterrestrialSLAM {
+    private List particles;  // Particle cloud for probabilistic estimation
+    private Map knownLandmarks;  // Detected landmarks with coordinates
+    private double[][] terrainMap;  // 2D grid representing terrain elevation
+
+    public ExtraterrestrialSLAM(int numParticles, int mapSize) {
+        particles = new ArrayList<>();
+        knownLandmarks = new HashMap<>();
+        terrainMap = new double[mapSize][mapSize];
+        initializeParticles(numParticles, mapSize);
+    }
+
+    // Initialize particles with random positions and weights
+    private void initializeParticles(int numParticles, int mapSize) {
+        Random rand = new Random();
+        for (int i = 0; i < numParticles; i++) {
+            double x = rand.nextDouble() * mapSize;
+            double y = rand.nextDouble() * mapSize;
+            particles.add(new Particle(x, y, 1.0 / numParticles));
+        }
+    }
+
+    // Update particle weights based on landmark observations
+    public void updateWeights(List observations) {
+        for (Particle p : particles) {
+            double weight = 1.0;
+            for (LandmarkObservation obs : observations) {
+                Landmark landmark = knownLandmarks.get(obs.getLandmarkId());
+                if (landmark != null) {
+                    double expectedDist = distance(p.x, p.y, landmark.x, landmark.y);
+                    weight *= gaussian(obs.getDistance(), expectedDist, 0.5);  // Sensor noise
+                }
+            }
+            p.weight = weight;
+        }
+        normalizeWeights();
+    }
+
+    // Resample particles based on their weights
+    public void resampleParticles() {
+        List newParticles = new ArrayList<>();
+        double[] cumulativeWeights = new double[particles.size()];
+        cumulativeWeights[0] = particles.get(0).weight;
+
+        for (int i = 1; i < particles.size(); i++) {
+            cumulativeWeights[i] = cumulativeWeights[i - 1] + particles.get(i).weight;
+        }
+
+        Random rand = new Random();
+        for (int i = 0; i < particles.size(); i++) {
+            double r = rand.nextDouble() * cumulativeWeights[particles.size() - 1];
+            int index = Arrays.binarySearch(cumulativeWeights, r);
+            if (index < 0) index = -index - 1;
+            newParticles.add(new Particle(particles.get(index)));
+        }
+        particles = newParticles;
+    }
+
+    // Helper methods
+    private double distance(double x1, double y1, double x2, double y2) {
+        return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+    }
+
+    private double gaussian(double x, double mu, double sigma) {
+        return Math.exp(-Math.pow(x - mu, 2) / (2 * Math.pow(sigma, 2)));
+    }
+
+    private void normalizeWeights() {
+        double sum = particles.stream().mapToDouble(p -> p.weight).sum();
+        particles.forEach(p -> p.weight /= sum);
+    }
+
+    // Nested classes
+    class Particle {
+        double x, y, weight;
+
+        Particle(double x, double y, double weight) {
+            this.x = x;
+            this.y = y;
+            this.weight = weight;
+        }
+
+        Particle(Particle other) {
+            this(other.x, other.y, other.weight);
+        }
+    }
+
+    class Landmark {
+        String id;
+        double x, y;
+
+        Landmark(String id, double x, double y) {
+            this.id = id;
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    class LandmarkObservation {
+        String landmarkId;
+        double distance;
+
+        LandmarkObservation(String landmarkId, double distance) {
+            this.landmarkId = landmarkId;
+            this.distance = distance;
+        }
+
+        String getLandmarkId() { return landmarkId; }
+        double getDistance() { return distance; }
+    }
+}
