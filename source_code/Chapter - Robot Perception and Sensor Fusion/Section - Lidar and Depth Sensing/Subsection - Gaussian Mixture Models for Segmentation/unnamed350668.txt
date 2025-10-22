@@ -1,0 +1,61 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.mixture import GaussianMixture
+from sklearn.cluster import KMeans
+
+def gmm_segmentation(point_cloud, n_components=3, max_iter=100):
+    """
+    Perform segmentation on 3D point cloud data using Gaussian Mixture Models (GMM).
+    
+    Args:
+        point_cloud (np.ndarray): Nx3 array of 3D points (x,y,z)
+        n_components (int): Number of GMM components (clusters)
+        max_iter (int): Maximum iterations for GMM convergence
+        
+    Returns:
+        tuple: (labels, centers) - Cluster labels and component means
+    """
+    # Preprocess: Remove NaN/inf and normalize
+    point_cloud = point_cloud[np.isfinite(point_cloud).all(axis=1)]
+    normalized_pc = (point_cloud - point_cloud.mean(axis=0)) / point_cloud.std(axis=0)
+    
+    # Initialize GMM with K-means (faster convergence)
+    kmeans = KMeans(n_clusters=n_components, n_init=10).fit(normalized_pc)
+    gmm = GaussianMixture(
+        n_components=n_components,
+        means_init=kmeans.cluster_centers_,
+        max_iter=max_iter,
+        random_state=42
+    )
+    
+    # Fit GMM and predict labels
+    gmm.fit(normalized_pc)
+    labels = gmm.predict(normalized_pc)
+    
+    # Denormalize cluster centers back to original space
+    centers = gmm.means_ * point_cloud.std(axis=0) + point_cloud.mean(axis=0)
+    
+    return labels, centers
+
+# Example usage with synthetic LIDAR data
+if __name__ == "__main__":
+    # Generate synthetic 3D point cloud (x,y,z) with 3 distinct clusters
+    np.random.seed(42)
+    cluster1 = np.random.normal(loc=[0, 0, 0], scale=0.2, size=(100, 3))
+    cluster2 = np.random.normal(loc=[1, 1, 0.5], scale=0.3, size=(150, 3))
+    cluster3 = np.random.normal(loc=[-1, -1, -0.5], scale=0.25, size=(120, 3))
+    point_cloud = np.vstack([cluster1, cluster2, cluster3])
+    
+    # Perform GMM segmentation
+    labels, centers = gmm_segmentation(point_cloud, n_components=3)
+    
+    # Visualize results
+    fig = plt.figure(figsize=(10, 7))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(point_cloud[:,0], point_cloud[:,1], point_cloud[:,2], 
+               c=labels, cmap='viridis', s=10)
+    ax.scatter(centers[:,0], centers[:,1], centers[:,2], 
+               c='red', marker='X', s=200, label='Cluster Centers')
+    ax.set_title('GMM Segmentation of LIDAR Point Cloud')
+    ax.legend()
+    plt.show()
