@@ -1,0 +1,107 @@
+import org.apache.commons.math3.linear.*;
+import java.util.List;
+
+/**
+ * CHOMP (Covariant Hamiltonian Optimization for Motion Planning) implementation
+ * for trajectory optimization in robotics.
+ */
+public class CHOMPOptimizer {
+    private double[][] trajectory; // Initial trajectory (N waypoints x D dimensions)
+    private double[][] obstacleCostGradient; // Gradient of obstacle cost
+    private double smoothnessWeight; // Weight for trajectory smoothness
+    private double obstacleWeight; // Weight for obstacle avoidance
+    private int maxIterations; // Maximum optimization iterations
+
+    public CHOMPOptimizer(double[][] initialTrajectory, double smoothnessWeight, 
+                         double obstacleWeight, int maxIterations) {
+        this.trajectory = initialTrajectory;
+        this.smoothnessWeight = smoothnessWeight;
+        this.obstacleWeight = obstacleWeight;
+        this.maxIterations = maxIterations;
+    }
+
+    /**
+     * Optimizes trajectory using CHOMP algorithm
+     */
+    public double[][] optimizeTrajectory(List obstacles) {
+        int n = trajectory.length;
+        int d = trajectory[0].length;
+        
+        for (int iter = 0; iter < maxIterations; iter++) {
+            // Compute smoothness gradient
+            RealMatrix smoothnessGrad = computeSmoothnessGradient(n, d);
+            
+            // Compute obstacle gradient (finite difference approximation)
+            RealMatrix obstacleGrad = computeObstacleGradient(obstacles, n, d);
+            
+            // Combine gradients with weights
+            RealMatrix totalGrad = smoothnessGrad.scalarMultiply(smoothnessWeight)
+                                  .add(obstacleGrad.scalarMultiply(obstacleWeight));
+            
+            // Update trajectory (gradient descent)
+            updateTrajectory(totalGrad, 0.01); // Learning rate = 0.01
+        }
+        return trajectory;
+    }
+
+    private RealMatrix computeSmoothnessGradient(int n, int d) {
+        // Create finite difference matrix for smoothness
+        RealMatrix A = MatrixUtils.createRealMatrix(n, n);
+        for (int i = 1; i < n-1; i++) {
+            A.setEntry(i, i-1, 1);
+            A.setEntry(i, i, -2);
+            A.setEntry(i, i+1, 1);
+        }
+        
+        // Compute gradient: A^T * A * trajectory
+        RealMatrix trajectoryMatrix = MatrixUtils.createRealMatrix(trajectory);
+        return A.transpose().multiply(A).multiply(trajectoryMatrix);
+    }
+
+    private RealMatrix computeObstacleGradient(List obstacles, int n, int d) {
+        RealMatrix grad = MatrixUtils.createRealMatrix(n, d);
+        // For each waypoint in trajectory
+        for (int i = 0; i < n; i++) {
+            double[] point = trajectory[i];
+            double[] pointGrad = new double[d];
+            
+            // Compute gradient contribution from each obstacle
+            for (Obstacle obs : obstacles) {
+                double[] obsGrad = obs.computeGradient(point);
+                for (int j = 0; j < d; j++) {
+                    pointGrad[j] += obsGrad[j];
+                }
+            }
+            grad.setRow(i, pointGrad);
+        }
+        return grad;
+    }
+
+    private void updateTrajectory(RealMatrix gradient, double learningRate) {
+        for (int i = 0; i < trajectory.length; i++) {
+            for (int j = 0; j < trajectory[0].length; j++) {
+                trajectory[i][j] -= learningRate * gradient.getEntry(i, j);
+            }
+        }
+    }
+}
+
+// Example obstacle class (simplified)
+class Obstacle {
+    private double[] position;
+    private double radius;
+
+    public double[] computeGradient(double[] point) {
+        double[] gradient = new double[point.length];
+        double dist = Math.sqrt(Math.pow(point[0]-position[0], 2) + 
+                               Math.pow(point[1]-position[1], 2));
+        
+        if (dist < radius) {
+            // Repulsive gradient when inside obstacle
+            for (int i = 0; i < gradient.length; i++) {
+                gradient[i] = (point[i] - position[i]) / (dist + 1e-6);
+            }
+        }
+        return gradient;
+    }
+}
