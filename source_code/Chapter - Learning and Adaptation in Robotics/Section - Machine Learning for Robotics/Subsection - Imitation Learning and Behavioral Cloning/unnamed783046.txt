@@ -1,0 +1,78 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
+import numpy as np
+
+# Custom dataset for loading expert demonstrations
+class ExpertDataset(Dataset):
+    def __init__(self, states, actions):
+        self.states = torch.FloatTensor(states)
+        self.actions = torch.FloatTensor(actions)
+    
+    def __len__(self):
+        return len(self.states)
+    
+    def __getitem__(self, idx):
+        return self.states[idx], self.actions[idx]
+
+# Behavioral Cloning policy network
+class BCPolicy(nn.Module):
+    def __init__(self, state_dim, action_dim, hidden_dim=64):
+        super(BCPolicy, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, action_dim)
+        )
+    
+    def forward(self, state):
+        return self.net(state)
+
+def train_behavioral_cloning(expert_data, epochs=100, batch_size=32):
+    # Prepare data
+    states, actions = expert_data
+    dataset = ExpertDataset(states, actions)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    
+    # Initialize policy and optimizer
+    state_dim = states.shape[1]
+    action_dim = actions.shape[1]
+    policy = BCPolicy(state_dim, action_dim)
+    optimizer = optim.Adam(policy.parameters(), lr=1e-3)
+    criterion = nn.MSELoss()
+    
+    # Training loop
+    for epoch in range(epochs):
+        epoch_loss = 0.0
+        for batch_states, batch_actions in dataloader:
+            optimizer.zero_grad()
+            pred_actions = policy(batch_states)
+            loss = criterion(pred_actions, batch_actions)
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.item()
+        
+        if epoch % 10 == 0:
+            print(f"Epoch {epoch}, Loss: {epoch_loss/len(dataloader):.4f}")
+    
+    return policy
+
+# Example usage
+if __name__ == "__main__":
+    # Generate synthetic expert data (replace with real data)
+    num_samples = 1000
+    state_dim = 10
+    action_dim = 2
+    expert_states = np.random.randn(num_samples, state_dim)
+    expert_actions = np.random.randn(num_samples, action_dim)
+    
+    # Train behavioral cloning policy
+    bc_policy = train_behavioral_cloning((expert_states, expert_actions))
+    
+    # Test the trained policy
+    test_state = torch.FloatTensor(np.random.randn(1, state_dim))
+    predicted_action = bc_policy(test_state)
+    print("Predicted action:", predicted_action.detach().numpy())
