@@ -1,0 +1,121 @@
+import java.util.*;
+
+public class AStarAlgorithm {
+    // Node class to represent each point in the grid
+    static class Node {
+        int x, y;           // Coordinates
+        double f, g, h;     // f = g + h (total cost)
+        Node parent;        // Parent node for path reconstruction
+
+        public Node(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        // Calculate heuristic (Euclidean distance to goal)
+        public void calculateHeuristic(Node goal) {
+            this.h = Math.sqrt(Math.pow(x - goal.x, 2) + Math.pow(y - goal.y, 2));
+        }
+
+        // Override equals and hashCode for HashSet operations
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (obj == null || getClass() != obj.getClass()) return false;
+            Node node = (Node) obj;
+            return x == node.x && y == node.y;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(x, y);
+        }
+    }
+
+    // A* pathfinding implementation
+    public static List findPath(Node start, Node goal, int[][] grid) {
+        PriorityQueue openSet = new PriorityQueue<>(Comparator.comparingDouble(a -> a.f));
+        Set closedSet = new HashSet<>();
+
+        start.g = 0;
+        start.calculateHeuristic(goal);
+        start.f = start.g + start.h;
+        openSet.add(start);
+
+        while (!openSet.isEmpty()) {
+            Node current = openSet.poll();
+
+            if (current.equals(goal)) {
+                return reconstructPath(current); // Path found
+            }
+
+            closedSet.add(current);
+
+            // Generate neighbors (4-directional movement)
+            for (Node neighbor : getNeighbors(current, grid)) {
+                if (closedSet.contains(neighbor)) continue;
+
+                double tentativeG = current.g + 1; // Assuming uniform cost
+
+                if (!openSet.contains(neighbor) || tentativeG < neighbor.g) {
+                    neighbor.parent = current;
+                    neighbor.g = tentativeG;
+                    neighbor.calculateHeuristic(goal);
+                    neighbor.f = neighbor.g + neighbor.h;
+
+                    if (!openSet.contains(neighbor)) {
+                        openSet.add(neighbor);
+                    }
+                }
+            }
+        }
+        return Collections.emptyList(); // No path found
+    }
+
+    // Get valid adjacent nodes (up, down, left, right)
+    private static List getNeighbors(Node node, int[][] grid) {
+        List neighbors = new ArrayList<>();
+        int[] dx = {-1, 1, 0, 0};
+        int[] dy = {0, 0, -1, 1};
+
+        for (int i = 0; i < 4; i++) {
+            int nx = node.x + dx[i];
+            int ny = node.y + dy[i];
+
+            if (nx >= 0 && nx < grid.length && ny >= 0 && ny < grid[0].length && grid[nx][ny] == 0) {
+                neighbors.add(new Node(nx, ny));
+            }
+        }
+        return neighbors;
+    }
+
+    // Reconstruct path from goal to start
+    private static List reconstructPath(Node current) {
+        List path = new ArrayList<>();
+        while (current != null) {
+            path.add(current);
+            current = current.parent;
+        }
+        Collections.reverse(path);
+        return path;
+    }
+
+    // Example usage
+    public static void main(String[] args) {
+        int[][] grid = {
+            {0, 0, 0, 0, 0},
+            {0, 1, 1, 1, 0}, // 1 represents obstacles
+            {0, 0, 0, 0, 0},
+            {0, 1, 1, 1, 0},
+            {0, 0, 0, 0, 0}
+        };
+
+        Node start = new Node(0, 0);
+        Node goal = new Node(4, 4);
+
+        List path = findPath(start, goal, grid);
+        for (Node node : path) {
+            System.out.println("(" + node.x + ", " + node.y + ")");
+        }
+    }
+}
