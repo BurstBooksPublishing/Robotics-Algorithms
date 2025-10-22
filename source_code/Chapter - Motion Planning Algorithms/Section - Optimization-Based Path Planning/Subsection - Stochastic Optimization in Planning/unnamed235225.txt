@@ -1,0 +1,59 @@
+import numpy as np
+from scipy.optimize import minimize
+
+def stochastic_objective(x, noise_scale=0.1):
+    """
+    Objective function with stochastic noise for path optimization.
+    Args:
+        x (np.array): Path waypoints (flattened).
+        noise_scale (float): Magnitude of Gaussian noise.
+    Returns:
+        float: Noisy objective value (path length + noise).
+    """
+    # Reshape to (n_waypoints, 2) and compute path length
+    waypoints = x.reshape(-1, 2)
+    path_length = np.sum(np.linalg.norm(np.diff(waypoints, axis=0), axis=1))
+    
+    # Add stochastic noise (simulating uncertain terrain)
+    noise = np.random.normal(scale=noise_scale)
+    return path_length + noise
+
+def optimize_path(initial_waypoints, bounds, n_iter=100):
+    """
+    Stochastic optimization for robotic path planning using SPSA.
+    Args:
+        initial_waypoints (np.array): Initial guess (n_waypoints x 2).
+        bounds (list): Bounds for each waypoint coordinate.
+        n_iter (int): Number of iterations.
+    Returns:
+        Optimized waypoints.
+    """
+    # Flatten initial waypoints for optimization
+    x0 = initial_waypoints.flatten()
+    
+    # Set up bounds for all variables
+    opt_bounds = bounds * (len(x0) // 2)
+    
+    # Stochastic optimization using SPSA (Simultaneous Perturbation Stochastic Approximation)
+    result = minimize(
+        stochastic_objective,
+        x0,
+        method='SPSA',
+        bounds=opt_bounds,
+        options={'maxiter': n_iter, 'disp': True}
+    )
+    
+    return result.x.reshape(-1, 2)
+
+# Example usage
+if __name__ == "__main__":
+    # Initial straight-line path (3 waypoints)
+    initial_path = np.array([[0, 0], [2, 2], [4, 0]])
+    
+    # Bounds for each coordinate (x,y in [0,5])
+    coord_bounds = [(0, 5), (0, 5)]
+    
+    # Run stochastic optimization
+    optimized_path = optimize_path(initial_path, coord_bounds)
+    
+    print("Optimized waypoints:\n", optimized_path)
