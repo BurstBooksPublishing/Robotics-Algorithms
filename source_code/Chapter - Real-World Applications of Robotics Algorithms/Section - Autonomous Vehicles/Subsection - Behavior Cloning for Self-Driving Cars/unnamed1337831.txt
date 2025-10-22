@@ -1,0 +1,67 @@
+import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
+import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
+import org.deeplearning4j.nn.conf.layers.DenseLayer;
+import org.deeplearning4j.nn.conf.layers.OutputLayer;
+import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
+import org.deeplearning4j.nn.weights.WeightInit;
+import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.dataset.DataSet;
+import org.nd4j.linalg.learning.config.Adam;
+import org.nd4j.linalg.lossfunctions.LossFunctions;
+
+/**
+ * Behavior Cloning for Self-Driving Cars using Deep Learning
+ * Simulates imitation learning by cloning expert driver behavior
+ */
+public class BehaviorCloning {
+
+    private MultiLayerNetwork model;
+
+    public BehaviorCloning(int inputSize, int outputSize) {
+        // Neural network configuration for behavior cloning
+        MultiLayerConfiguration config = new NeuralNetConfiguration.Builder()
+            .seed(123)
+            .weightInit(WeightInit.XAVIER)
+            .updater(new Adam(0.001))
+            .list()
+            .layer(new DenseLayer.Builder()
+                .nIn(inputSize)  // Input: sensor data (e.g., camera, lidar)
+                .nOut(256)
+                .activation(Activation.RELU)
+                .build())
+            .layer(new DenseLayer.Builder()
+                .nOut(128)
+                .activation(Activation.RELU)
+                .build())
+            .layer(new OutputLayer.Builder(LossFunctions.LossFunction.MSE)
+                .nOut(outputSize)  // Output: steering angle, throttle, brake
+                .activation(Activation.TANH)  // Normalized outputs [-1,1]
+                .build())
+            .build();
+
+        this.model = new MultiLayerNetwork(config);
+        this.model.init();
+    }
+
+    /**
+     * Train the model on expert demonstration data
+     * @param trainingData Contains state-action pairs from expert driver
+     */
+    public void train(DataSet trainingData) {
+        // Early stopping could be added here
+        for (int i = 0; i < 10; i++) {
+            model.fit(trainingData);  // Batch training
+        }
+    }
+
+    /**
+     * Predict control actions given current sensor input
+     * @param inputState Current sensor readings
+     * @return Predicted control actions [steering, throttle, brake]
+     */
+    public double[] predict(double[] inputState) {
+        return model.output(inputState).toDoubleVector();
+    }
+
+    // Additional methods for data preprocessing, evaluation, etc.
+}
