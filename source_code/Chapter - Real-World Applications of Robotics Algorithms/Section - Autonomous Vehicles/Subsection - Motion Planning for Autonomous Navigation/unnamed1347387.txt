@@ -1,0 +1,69 @@
+import numpy as np
+from scipy.spatial import KDTree
+from queue import PriorityQueue
+
+class MotionPlanner:
+    def __init__(self, grid_resolution=0.1, safety_margin=0.5):
+        """Initialize motion planner with grid resolution and safety margin."""
+        self.grid_resolution = grid_resolution
+        self.safety_margin = safety_margin
+        self.obstacle_kdtree = None
+
+    def update_obstacles(self, obstacles):
+        """Update obstacle positions for collision checking."""
+        obstacle_points = np.array(obstacles)
+        self.obstacle_kdtree = KDTree(obstacle_points)
+
+    def is_collision_free(self, point):
+        """Check if a point is collision-free using nearest neighbor search."""
+        if self.obstacle_kdtree is None:
+            return True
+        dist, _ = self.obstacle_kdtree.query(point)
+        return dist > self.safety_margin
+
+    def heuristic(self, a, b):
+        """Euclidean distance heuristic for A* algorithm."""
+        return np.linalg.norm(np.array(a) - np.array(b))
+
+    def plan_path(self, start, goal, max_iter=1000):
+        """A* path planning algorithm with obstacle avoidance."""
+        frontier = PriorityQueue()
+        frontier.put((0, start))
+        came_from = {start: None}
+        cost_so_far = {start: 0}
+
+        for _ in range(max_iter):
+            if frontier.empty():
+                break
+
+            _, current = frontier.get()
+
+            if self.heuristic(current, goal) < self.grid_resolution:
+                break
+
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    if dx == 0 and dy == 0:
+                        continue
+                    next_point = (current[0] + dx * self.grid_resolution,
+                                 current[1] + dy * self.grid_resolution)
+                    if not self.is_collision_free(next_point):
+                        continue
+                    new_cost = cost_so_far[current] + self.heuristic(current, next_point)
+                    if next_point not in cost_so_far or new_cost < cost_so_far[next_point]:
+                        cost_so_far[next_point] = new_cost
+                        priority = new_cost + self.heuristic(next_point, goal)
+                        frontier.put((priority, next_point))
+                        came_from[next_point] = current
+
+        # Reconstruct path
+        path = []
+        current = goal
+        while current != start:
+            path.append(current)
+            current = came_from.get(current, None)
+            if current is None:
+                return []  # No path found
+        path.append(start)
+        path.reverse()
+        return path
