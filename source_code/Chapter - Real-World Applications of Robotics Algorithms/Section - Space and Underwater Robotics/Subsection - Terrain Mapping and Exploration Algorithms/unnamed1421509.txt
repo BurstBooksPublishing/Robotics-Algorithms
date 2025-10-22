@@ -1,0 +1,115 @@
+import java.util.*;
+
+/**
+ * Advanced terrain mapping and exploration algorithm for robotics,
+ * particularly suited for space or underwater environments.
+ * Uses a combination of BFS and Dijkstra's for optimal pathfinding.
+ */
+public class TerrainExploration {
+    private int[][] terrainMap; // 2D grid representing terrain elevation/obstacles
+    private int rows, cols;
+    private int[][] directions = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}; // 4-directional movement
+
+    public TerrainExploration(int[][] terrainMap) {
+        this.terrainMap = terrainMap;
+        this.rows = terrainMap.length;
+        this.cols = terrainMap[0].length;
+    }
+
+    /**
+     * Explores terrain using BFS with obstacle detection
+     * @param start Starting coordinates [x,y]
+     * @return 2D array of visited nodes with exploration order
+     */
+    public int[][] exploreTerrainBFS(int[] start) {
+        int[][] explorationOrder = new int[rows][cols];
+        Queue queue = new LinkedList<>();
+        boolean[][] visited = new boolean[rows][cols];
+        
+        queue.offer(start);
+        visited[start[0]][start[1]] = true;
+        int order = 1;
+        
+        while (!queue.isEmpty()) {
+            int[] current = queue.poll();
+            explorationOrder[current[0]][current[1]] = order++;
+            
+            for (int[] dir : directions) {
+                int newX = current[0] + dir[0];
+                int newY = current[1] + dir[1];
+                
+                if (isValid(newX, newY) && !visited[newX][newY] && 
+                    terrainMap[newX][newY] != -1) { // -1 represents obstacles
+                    visited[newX][newY] = true;
+                    queue.offer(new int[]{newX, newY});
+                }
+            }
+        }
+        return explorationOrder;
+    }
+
+    /**
+     * Finds optimal path using Dijkstra's algorithm with terrain cost
+     * @param start Starting coordinates [x,y]
+     * @param end Target coordinates [x,y]
+     * @return List of coordinates representing the optimal path
+     */
+    public List findOptimalPath(int[] start, int[] end) {
+        PriorityQueue pq = new PriorityQueue<>(Comparator.comparingInt(n -> n.cost));
+        int[][] costSoFar = new int[rows][cols];
+        int[][] cameFrom = new int[rows][cols];
+        
+        for (int[] row : costSoFar) Arrays.fill(row, Integer.MAX_VALUE);
+        costSoFar[start[0]][start[1]] = 0;
+        pq.offer(new Node(start[0], start[1], 0));
+        
+        while (!pq.isEmpty()) {
+            Node current = pq.poll();
+            
+            if (current.x == end[0] && current.y == end[1]) break;
+            
+            for (int[] dir : directions) {
+                int newX = current.x + dir[0];
+                int newY = current.y + dir[1];
+                
+                if (isValid(newX, newY) && terrainMap[newX][newY] != -1) {
+                    int newCost = current.cost + terrainMap[newX][newY]; // Cost based on terrain
+                    if (newCost < costSoFar[newX][newY]) {
+                        costSoFar[newX][newY] = newCost;
+                        cameFrom[newX][newY] = current.x * cols + current.y; // Encode position
+                        pq.offer(new Node(newX, newY, newCost));
+                    }
+                }
+            }
+        }
+        return reconstructPath(cameFrom, start, end);
+    }
+
+    private boolean isValid(int x, int y) {
+        return x >= 0 && x < rows && y >= 0 && y < cols;
+    }
+
+    private List reconstructPath(int[][] cameFrom, int[] start, int[] end) {
+        List path = new ArrayList<>();
+        int current = end[0] * cols + end[1];
+        int startPos = start[0] * cols + start[1];
+        
+        while (current != startPos) {
+            int x = current / cols;
+            int y = current % cols;
+            path.add(0, new int[]{x, y});
+            current = cameFrom[x][y];
+        }
+        path.add(0, start);
+        return path;
+    }
+
+    private static class Node {
+        int x, y, cost;
+        public Node(int x, int y, int cost) {
+            this.x = x;
+            this.y = y;
+            this.cost = cost;
+        }
+    }
+}
