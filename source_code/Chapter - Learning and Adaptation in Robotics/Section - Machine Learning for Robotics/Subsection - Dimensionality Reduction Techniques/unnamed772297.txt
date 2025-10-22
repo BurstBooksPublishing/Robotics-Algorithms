@@ -1,0 +1,81 @@
+import org.apache.commons.math3.linear.*;
+import org.apache.commons.math3.stat.correlation.Covariance;
+import java.util.Arrays;
+
+/**
+ * Principal Component Analysis (PCA) implementation for Robotics Algorithms.
+ * Reduces dimensionality of sensor/feature data while preserving variance.
+ * Part of Chapter 7: Learning and Adaptation in Robotics.
+ */
+public class RoboticsPCA {
+    private RealMatrix principalComponents;
+    private RealVector meanVector;
+
+    /**
+     * Fits PCA model to robotics sensor data (e.g., LIDAR, vision features)
+     * @param data Input data matrix (rows = observations, columns = features)
+     * @param targetDim Target dimensionality after reduction
+     */
+    public void fit(double[][] data, int targetDim) {
+        RealMatrix matrix = MatrixUtils.createRealMatrix(data);
+        
+        // Center the data by subtracting mean
+        meanVector = new ArrayRealVector(matrix.getColumnDimension());
+        for (int i = 0; i < matrix.getColumnDimension(); i++) {
+            meanVector.setEntry(i, matrix.getColumnVector(i).getMean());
+            matrix.setColumn(i, matrix.getColumnVector(i).subtract(meanVector.getEntry(i)).toArray());
+        }
+
+        // Compute covariance matrix
+        Covariance covariance = new Covariance(matrix);
+        RealMatrix covarianceMatrix = covariance.getCovarianceMatrix();
+
+        // Perform eigenvalue decomposition
+        EigenDecomposition eig = new EigenDecomposition(covarianceMatrix);
+        RealMatrix eigenvectors = eig.getV();
+
+        // Sort eigenvalues in descending order and select top components
+        double[] eigenvalues = eig.getRealEigenvalues();
+        int[] sortedIndices = argsort(eigenvalues, false);
+        principalComponents = eigenvectors.getSubMatrix(0, eigenvectors.getRowDimension()-1, 
+                                                       sortedIndices[0], sortedIndices[targetDim-1]);
+    }
+
+    /**
+     * Transforms input data to reduced dimensionality space
+     * @param data Input data (single observation)
+     * @return Reduced dimensionality representation
+     */
+    public double[] transform(double[] data) {
+        RealVector centered = new ArrayRealVector(data).subtract(meanVector);
+        return principalComponents.transpose().operate(centered).toArray();
+    }
+
+    // Helper method to sort indices based on values
+    private static int[] argsort(double[] array, boolean ascending) {
+        Integer[] indices = new Integer[array.length];
+        for (int i = 0; i < indices.length; i++) indices[i] = i;
+        
+        Arrays.sort(indices, (i, j) -> ascending ? 
+            Double.compare(array[i], array[j]) : 
+            Double.compare(array[j], array[i]));
+        
+        return Arrays.stream(indices).mapToInt(Integer::intValue).toArray();
+    }
+
+    // Example usage for robotic perception system
+    public static void main(String[] args) {
+        // Simulated sensor data (e.g., 10D LIDAR features)
+        double[][] sensorData = {
+            {1.2, 0.8, 3.4, 2.1, 5.6, 1.9, 2.3, 4.5, 0.7, 1.1},
+            {1.5, 0.9, 3.1, 2.4, 5.2, 2.1, 2.0, 4.3, 0.9, 1.3},
+            // ... more sensor readings
+        };
+
+        RoboticsPCA pca = new RoboticsPCA();
+        pca.fit(sensorData, 3); // Reduce to 3 principal components
+
+        double[] reduced = pca.transform(sensorData[0]);
+        System.out.println("Reduced features: " + Arrays.toString(reduced));
+    }
+}
