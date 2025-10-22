@@ -1,0 +1,71 @@
+import org.ros.node.AbstractNodeMain;
+import org.ros.node.ConnectedNode;
+import org.ros.node.topic.Publisher;
+import org.ros.message.MessageListener;
+import org.ros.namespace.GraphName;
+import org.ros.node.topic.Subscriber;
+import sensor_msgs.LaserScan;
+import nav_msgs.OccupancyGrid;
+
+/**
+ * Advanced JAVA ROS implementation for SLAM and Perception.
+ * Demonstrates LiDAR data processing and map generation.
+ */
+public class SlamPerceptionNode extends AbstractNodeMain {
+    private Publisher mapPublisher;
+    private Subscriber laserSubscriber;
+
+    @Override
+    public GraphName getDefaultNodeName() {
+        return GraphName.of("slam_perception_node");
+    }
+
+    @Override
+    public void onStart(ConnectedNode connectedNode) {
+        // Initialize map publisher for occupancy grid updates
+        mapPublisher = connectedNode.newPublisher("/map", OccupancyGrid._TYPE);
+
+        // Subscribe to LiDAR data for SLAM processing
+        laserSubscriber = connectedNode.newSubscriber("/scan", LaserScan._TYPE);
+        laserSubscriber.addMessageListener(new MessageListener() {
+            @Override
+            public void onNewMessage(LaserScan scan) {
+                processLaserData(scan, connectedNode);
+            }
+        });
+    }
+
+    /**
+     * Processes incoming LiDAR data and updates occupancy grid.
+     */
+    private void processLaserData(LaserScan scan, ConnectedNode node) {
+        // Create new occupancy grid message
+        OccupancyGrid map = node.getTopicMessageFactory().newFromType(OccupancyGrid._TYPE);
+        
+        // Set basic map metadata (example values)
+        map.getHeader().setFrameId("odom");
+        map.getInfo().setResolution(0.05f); // 5cm per cell
+        map.getInfo().setWidth(400);       // 20m wide
+        map.getInfo().setHeight(400);      // 20m tall
+        
+        // Process scan ranges (simplified example)
+        byte[] data = new byte[400 * 400];
+        for (int i = 0; i < scan.getRanges().length; i++) {
+            float range = scan.getRanges()[i];
+            if (!Float.isInfinite(range)) {
+                // Convert polar to cartesian coordinates
+                double angle = scan.getAngleMin() + i * scan.getAngleIncrement();
+                int x = (int) ((range * Math.cos(angle)) / 0.05) + 200;
+                int y = (int) ((range * Math.sin(angle)) / 0.05) + 200;
+                
+                // Mark obstacle in occupancy grid
+                if (x >= 0 && x < 400 && y >= 0 && y < 400) {
+                    data[y * 400 + x] = 100; // 100 = occupied
+                }
+            }
+        }
+        
+        map.setData(data);
+        mapPublisher.publish(map);
+    }
+}
