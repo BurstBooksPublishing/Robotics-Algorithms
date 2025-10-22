@@ -1,0 +1,45 @@
+import org.opencv.core.Core;
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfKeyPoint;
+import org.opencv.features2d.Feature2D;
+import org.opencv.features2d.SIFT;
+import org.opencv.features2d.SURF;
+import org.opencv.features2d.ORB;
+import org.opencv.imgcodecs.Imgcodecs;
+
+public class FeatureDetection {
+    static {
+        System.loadLibrary(Core.NATIVE_LIBRARY_NAME); // Load OpenCV native library
+    }
+
+    public static void main(String[] args) {
+        // Load input image
+        Mat image = Imgcodecs.imread("robot_vision.jpg", Imgcodecs.IMREAD_GRAYSCALE);
+        if (image.empty()) {
+            System.out.println("Error: Image not found");
+            return;
+        }
+
+        // Initialize feature detectors
+        Feature2D siftDetector = SIFT.create();
+        Feature2D surfDetector = SURF.create(400); // Hessian threshold
+        Feature2D orbDetector = ORB.create();
+
+        // Detect keypoints
+        MatOfKeyPoint siftKeyPoints = new MatOfKeyPoint();
+        MatOfKeyPoint surfKeyPoints = new MatOfKeyPoint();
+        MatOfKeyPoint orbKeyPoints = new MatOfKeyPoint();
+
+        siftDetector.detect(image, siftKeyPoints);
+        surfDetector.detect(image, surfKeyPoints);
+        orbDetector.detect(image, orbKeyPoints);
+
+        // Output number of detected features
+        System.out.println("SIFT features: " + siftKeyPoints.size());
+        System.out.println("SURF features: " + surfKeyPoints.size());
+        System.out.println("ORB features: " + orbKeyPoints.size());
+
+        // Note: For visualization, you would typically draw keypoints on the image
+        // and display it using OpenCV's highgui module
+    }
+}
