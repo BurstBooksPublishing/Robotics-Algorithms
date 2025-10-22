@@ -1,0 +1,77 @@
+import org.apache.commons.math3.distribution.NormalDistribution;
+import org.apache.commons.math3.ml.clustering.*;
+import org.apache.commons.math3.ml.clustering.GaussianMixtureModel;
+import org.apache.commons.math3.ml.clustering.KMeansPlusPlusClusterer;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Gaussian Mixture Model (GMM) for segmenting Lidar point cloud data.
+ * Part of Robot Perception pipeline for depth sensing.
+ */
+public class GMRSegmentation {
+
+    // GMM parameters
+    private int numComponents;
+    private double convergenceThreshold;
+    private int maxIterations;
+
+    public GMRSegmentation(int numComponents, double convergenceThreshold, int maxIterations) {
+        this.numComponents = numComponents;
+        this.convergenceThreshold = convergenceThreshold;
+        this.maxIterations = maxIterations;
+    }
+
+    /**
+     * Segments 3D point cloud using GMM clustering
+     * @param points List of 3D points from Lidar scan
+     * @return Cluster assignments for each point
+     */
+    public int[] segmentPoints(List points) {
+        // Convert points to Clusterable format
+        List clusterablePoints = new ArrayList<>();
+        for (double[] point : points) {
+            clusterablePoints.add(new DoublePoint(point));
+        }
+
+        // Initialize with K-means++ for better starting positions
+        KMeansPlusPlusClusterer kmeans = new KMeansPlusPlusClusterer<>(numComponents);
+        List> initialClusters = kmeans.cluster(clusterablePoints);
+
+        // Create GMM with initial parameters from K-means
+        GaussianMixtureModel gmm = new GaussianMixtureModel<>(
+            numComponents, 
+            convergenceThreshold, 
+            maxIterations
+        );
+
+        // Fit GMM to data
+        List> clusters = gmm.cluster(clusterablePoints);
+
+        // Extract cluster assignments
+        int[] assignments = new int[points.size()];
+        for (int i = 0; i < clusters.size(); i++) {
+            for (DoublePoint p : clusters.get(i).getPoints()) {
+                assignments[clusterablePoints.indexOf(p)] = i;
+            }
+        }
+
+        return assignments;
+    }
+
+    /**
+     * Helper class for Apache Commons Math clustering interface
+     */
+    private static class DoublePoint implements Clusterable {
+        private final double[] point;
+
+        public DoublePoint(double[] point) {
+            this.point = point.clone();
+        }
+
+        @Override
+        public double[] getPoint() {
+            return point.clone();
+        }
+    }
+}
