@@ -1,0 +1,66 @@
+/**
+ * SLIP (Spring-Loaded Inverted Pendulum) Model for Running Robots
+ * Robotics Algorithms - Chapter 10: Legged and Aerial Robotics
+ * Section: Bipedal and Quadrupedal Locomotion
+ * 
+ * Simulates the dynamics of a running robot using the SLIP model.
+ */
+public class SLIPModel {
+    private double mass;          // Robot mass (kg)
+    private double springConstant; // Spring stiffness (N/m)
+    private double restLength;    // Spring rest length (m)
+    private double gravity;       // Gravitational acceleration (m/s²)
+
+    // Current state variables
+    private double[] position;    // [x, y] position (m)
+    private double[] velocity;    // [vx, vy] velocity (m/s)
+
+    /**
+     * Initialize SLIP model with parameters.
+     */
+    public SLIPModel(double mass, double springConstant, double restLength, double gravity) {
+        this.mass = mass;
+        this.springConstant = springConstant;
+        this.restLength = restLength;
+        this.gravity = gravity;
+        this.position = new double[2];
+        this.velocity = new double[2];
+    }
+
+    /**
+     * Update robot state using SLIP dynamics.
+     * @param dt Time step (s)
+     */
+    public void update(double dt) {
+        // Calculate spring force if in contact (y <= restLength)
+        double springForce = 0.0;
+        if (position[1] <= restLength) {
+            double compression = restLength - position[1];
+            springForce = springConstant * compression;
+        }
+
+        // Calculate accelerations
+        double ax = 0.0;          // No horizontal force in basic model
+        double ay = (springForce / mass) - gravity;
+
+        // Update velocity using Euler integration
+        velocity[0] += ax * dt;
+        velocity[1] += ay * dt;
+
+        // Update position
+        position[0] += velocity[0] * dt;
+        position[1] += velocity[1] * dt;
+
+        // Ground collision (simple bounce)
+        if (position[1] < 0) {
+            position[1] = 0;
+            velocity[1] = -velocity[1] * 0.8; // Coefficient of restitution
+        }
+    }
+
+    /**
+     * Get current robot state.
+     */
+    public double[] getPosition() { return position.clone(); }
+    public double[] getVelocity() { return velocity.clone(); }
+}
