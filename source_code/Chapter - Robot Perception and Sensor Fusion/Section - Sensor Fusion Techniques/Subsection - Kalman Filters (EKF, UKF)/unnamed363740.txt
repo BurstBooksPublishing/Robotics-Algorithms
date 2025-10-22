@@ -1,0 +1,100 @@
+import numpy as np
+from scipy.linalg import sqrtm
+
+class ExtendedKalmanFilter:
+    """Extended Kalman Filter (EKF) for nonlinear state estimation."""
+    
+    def __init__(self, state_dim, obs_dim):
+        self.state_dim = state_dim
+        self.obs_dim = obs_dim
+        self.state = np.zeros(state_dim)  # Initial state
+        self.cov = np.eye(state_dim)      # Initial covariance
+        
+    def predict(self, f, F_jacobian, Q):
+        """Prediction step using nonlinear state transition."""
+        # Linearize state transition around current state
+        F = F_jacobian(self.state)
+        # Predict state and covariance
+        self.state = f(self.state)
+        self.cov = F @ self.cov @ F.T + Q
+        
+    def update(self, z, h, H_jacobian, R):
+        """Update step using nonlinear observation."""
+        # Linearize observation model around predicted state
+        H = H_jacobian(self.state)
+        # Compute Kalman gain
+        S = H @ self.cov @ H.T + R
+        K = self.cov @ H.T @ np.linalg.inv(S)
+        # Update state and covariance
+        y = z - h(self.state)
+        self.state += K @ y
+        self.cov = (np.eye(self.state_dim) - K @ H) @ self.cov
+
+class UnscentedKalmanFilter:
+    """Unscented Kalman Filter (UKF) for nonlinear state estimation."""
+    
+    def __init__(self, state_dim, obs_dim, alpha=1e-3, beta=2, kappa=0):
+        self.state_dim = state_dim
+        self.obs_dim = obs_dim
+        self.state = np.zeros(state_dim)  # Initial state
+        self.cov = np.eye(state_dim)      # Initial covariance
+        # UKF parameters
+        self.alpha = alpha
+        self.beta = beta
+        self.kappa = kappa
+        self.lambd = alpha**2 * (state_dim + kappa) - state_dim
+        self.gamma = np.sqrt(state_dim + self.lambd)
+        
+    def _compute_sigma_points(self):
+        """Generate sigma points for UKF."""
+        sigma_points = np.zeros((2 * self.state_dim + 1, self.state_dim))
+        sqrt_cov = sqrtm(self.cov)
+        sigma_points[0] = self.state
+        for i in range(self.state_dim):
+            sigma_points[i+1] = self.state + self.gamma * sqrt_cov[:, i]
+            sigma_points[self.state_dim+i+1] = self.state - self.gamma * sqrt_cov[:, i]
+        return sigma_points
+    
+    def _compute_weights(self):
+        """Compute weights for sigma points."""
+        weights_mean = np.zeros(2 * self.state_dim + 1)
+        weights_cov = np.zeros_like(weights_mean)
+        weights_mean[0] = self.lambd / (self.state_dim + self.lambd)
+        weights_cov[0] = weights_mean[0] + (1 - self.alpha**2 + self.beta)
+        for i in range(1, 2 * self.state_dim + 1):
+            weights_mean[i] = 1 / (2 * (self.state_dim + self.lambd))
+            weights_cov[i] = weights_mean[i]
+        return weights_mean, weights_cov
+    
+    def predict(self, f, Q):
+        """Prediction step using unscented transform."""
+        sigma_points = self._compute_sigma_points()
+        weights_mean, weights_cov = self._compute_weights()
+        # Transform sigma points through state transition
+        pred_sigma_points = np.array([f(x) for x in sigma_points])
+        # Compute predicted state and covariance
+        self.state = np.sum(weights_mean[:, None] * pred_sigma_points, axis=0)
+        self.cov = Q.copy()
+        for i, x in enumerate(pred_sigma_points):
+            diff = x - self.state
+            self.cov += weights_cov[i] * np.outer(diff, diff)
+            
+    def update(self, z, h, R):
+        """Update step using unscented transform."""
+        sigma_points = self._compute_sigma_points()
+        weights_mean, weights_cov = self._compute_weights()
+        # Transform sigma points through observation model
+        obs_sigma_points = np.array([h(x) for x in sigma_points])
+        # Compute predicted observation and covariance
+        pred_z = np.sum(weights_mean[:, None] * obs_sigma_points, axis=0)
+        S = R.copy()
+        C = np.zeros((self.state_dim, self.obs_dim))
+        for i, (x, z_pt) in enumerate(zip(sigma_points, obs_sigma_points)):
+            diff_z = z_pt - pred_z
+            diff_x = x - self.state
+            S += weights_cov[i] * np.outer(diff_z, diff_z)
+            C += weights_cov[i] * np.outer(diff_x, diff_z)
+        # Compute Kalman gain and update
+        K = C @ np.linalg.inv(S)
+        self.state += K @ (z - pred_z)
+        self.cov -= K @ S @ K.T
