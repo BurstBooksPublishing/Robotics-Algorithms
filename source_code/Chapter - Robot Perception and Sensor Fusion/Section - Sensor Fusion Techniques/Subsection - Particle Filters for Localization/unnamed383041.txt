@@ -1,0 +1,111 @@
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+public class ParticleFilter {
+    private List particles;
+    private int numParticles;
+    private Random random;
+
+    // Particle class representing a single hypothesis
+    private class Particle {
+        double x, y, theta; // Position and orientation
+        double weight;      // Importance weight
+
+        public Particle(double x, double y, double theta, double weight) {
+            this.x = x;
+            this.y = y;
+            this.theta = theta;
+            this.weight = weight;
+        }
+    }
+
+    // Initialize particle filter with uniform distribution
+    public ParticleFilter(int numParticles, double mapWidth, double mapHeight) {
+        this.numParticles = numParticles;
+        this.random = new Random();
+        particles = new ArrayList<>();
+
+        // Uniformly distribute particles across the map
+        for (int i = 0; i < numParticles; i++) {
+            double x = random.nextDouble() * mapWidth;
+            double y = random.nextDouble() * mapHeight;
+            double theta = random.nextDouble() * 2 * Math.PI;
+            particles.add(new Particle(x, y, theta, 1.0 / numParticles));
+        }
+    }
+
+    // Predict particle motion with noise
+    public void predict(double deltaX, double deltaY, double deltaTheta, double motionNoise) {
+        for (Particle p : particles) {
+            // Apply motion model with added Gaussian noise
+            p.x += deltaX + random.nextGaussian() * motionNoise;
+            p.y += deltaY + random.nextGaussian() * motionNoise;
+            p.theta += deltaTheta + random.nextGaussian() * motionNoise * 0.1;
+        }
+    }
+
+    // Update particle weights based on sensor measurements
+    public void updateWeights(double[] sensorReadings, double sensorNoise) {
+        double weightSum = 0;
+
+        for (Particle p : particles) {
+            // Simplified measurement model: compare expected vs actual readings
+            double expectedReading = computeExpectedReading(p);
+            double error = Math.abs(expectedReading - sensorReadings[0]); // Simplified for demo
+            p.weight = Math.exp(-error * error / (2 * sensorNoise * sensorNoise));
+            weightSum += p.weight;
+        }
+
+        // Normalize weights
+        for (Particle p : particles) {
+            p.weight /= weightSum;
+        }
+    }
+
+    // Resample particles based on their weights
+    public void resample() {
+        List newParticles = new ArrayList<>();
+        double[] cumulativeWeights = new double[numParticles];
+        cumulativeWeights[0] = particles.get(0).weight;
+
+        // Compute cumulative weights
+        for (int i = 1; i < numParticles; i++) {
+            cumulativeWeights[i] = cumulativeWeights[i-1] + particles.get(i).weight;
+        }
+
+        // Systematic resampling
+        double step = 1.0 / numParticles;
+        double position = random.nextDouble() * step;
+
+        int currentIndex = 0;
+        for (int i = 0; i < numParticles; i++) {
+            while (position > cumulativeWeights[currentIndex]) {
+                currentIndex++;
+            }
+            Particle p = particles.get(currentIndex);
+            newParticles.add(new Particle(p.x, p.y, p.theta, 1.0 / numParticles));
+            position += step;
+        }
+
+        particles = newParticles;
+    }
+
+    // Simplified function to compute expected sensor reading
+    private double computeExpectedReading(Particle p) {
+        // In a real implementation, this would use a sensor model
+        return Math.sqrt(p.x * p.x + p.y * p.y); // Simplified for demo
+    }
+
+    // Get best estimate (weighted average)
+    public double[] getEstimate() {
+        double x = 0, y = 0, thetaX = 0, thetaY = 0;
+        for (Particle p : particles) {
+            x += p.x * p.weight;
+            y += p.y * p.weight;
+            thetaX += Math.cos(p.theta) * p.weight;
+            thetaY += Math.sin(p.theta) * p.weight;
+        }
+        return new double[]{x, y, Math.atan2(thetaY, thetaX)};
+    }
+}
