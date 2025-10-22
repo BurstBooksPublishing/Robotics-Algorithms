@@ -1,0 +1,144 @@
+import org.ejml.simple.SimpleMatrix;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Factor Graph SLAM implementation for Robotics Algorithms.
+ * Models robot poses and landmarks as nodes with probabilistic constraints.
+ */
+public class FactorGraphSLAM {
+    private List poses;      // Robot poses (x, y, theta)
+    private List landmarks;  // Landmark positions (x, y)
+    private List factors;          // Probabilistic constraints
+
+    public FactorGraphSLAM() {
+        poses = new ArrayList<>();
+        landmarks = new ArrayList<>();
+        factors = new ArrayList<>();
+    }
+
+    /**
+     * Adds a new pose node to the factor graph.
+     * @param pose Initial pose estimate (3x1 vector)
+     */
+    public void addPose(SimpleMatrix pose) {
+        poses.add(pose);
+    }
+
+    /**
+     * Adds a new landmark node to the factor graph.
+     * @param landmark Initial landmark estimate (2x1 vector)
+     */
+    public void addLandmark(SimpleMatrix landmark) {
+        landmarks.add(landmark);
+    }
+
+    /**
+     * Adds an odometry factor between two consecutive poses.
+     * @param poseIdx Index of the second pose
+     * @param measurement Relative motion measurement (3x1 vector)
+     * @param covariance Measurement noise (3x3 matrix)
+     */
+    public void addOdometryFactor(int poseIdx, SimpleMatrix measurement, SimpleMatrix covariance) {
+        factors.add(new OdometryFactor(poseIdx - 1, poseIdx, measurement, covariance));
+    }
+
+    /**
+     * Adds a landmark observation factor.
+     * @param poseIdx Index of the observing pose
+     * @param landmarkIdx Index of the observed landmark
+     * @param measurement Relative observation (2x1 vector)
+     * @param covariance Measurement noise (2x2 matrix)
+     */
+    public void addObservationFactor(int poseIdx, int landmarkIdx, SimpleMatrix measurement, SimpleMatrix covariance) {
+        factors.add(new ObservationFactor(poseIdx, landmarkIdx, measurement, covariance));
+    }
+
+    /**
+     * Optimizes the factor graph using Gauss-Newton method.
+     * @param iterations Maximum number of iterations
+     */
+    public void optimize(int iterations) {
+        for (int iter = 0; iter < iterations; iter++) {
+            SimpleMatrix H = new SimpleMatrix(getTotalStates(), getTotalStates());
+            SimpleMatrix b = new SimpleMatrix(getTotalStates(), 1);
+
+            // Linearize all factors and build system
+            for (Factor factor : factors) {
+                factor.linearize(poses, landmarks, H, b);
+            }
+
+            // Solve and update states
+            SimpleMatrix delta = H.solve(b);
+            updateStates(delta);
+        }
+    }
+
+    private int getTotalStates() {
+        return poses.size() * 3 + landmarks.size() * 2;
+    }
+
+    private void updateStates(SimpleMatrix delta) {
+        // Update poses
+        for (int i = 0; i < poses.size(); i++) {
+            SimpleMatrix pose = poses.get(i);
+            pose.set(0, 0, pose.get(0) + delta.get(i * 3));
+            pose.set(1, 0, pose.get(1) + delta.get(i * 3 + 1));
+            pose.set(2, 0, pose.get(2) + delta.get(i * 3 + 2));
+        }
+
+        // Update landmarks
+        int offset = poses.size() * 3;
+        for (int i = 0; i < landmarks.size(); i++) {
+            SimpleMatrix landmark = landmarks.get(i);
+            landmark.set(0, 0, landmark.get(0) + delta.get(offset + i * 2));
+            landmark.set(1, 0, landmark.get(1) + delta.get(offset + i * 2 + 1));
+        }
+    }
+
+    // Abstract factor class
+    private abstract static class Factor {
+        public abstract void linearize(List poses, List landmarks,
+                                     SimpleMatrix H, SimpleMatrix b);
+    }
+
+    // Odometry factor implementation
+    private static class OdometryFactor extends Factor {
+        private int poseFrom, poseTo;
+        private SimpleMatrix measurement, covariance;
+
+        public OdometryFactor(int from, int to, SimpleMatrix z, SimpleMatrix Q) {
+            poseFrom = from;
+            poseTo = to;
+            measurement = z;
+            covariance = Q;
+        }
+
+        @Override
+        public void linearize(List poses, List landmarks,
+                            SimpleMatrix H, SimpleMatrix b) {
+            // Implementation of odometry factor linearization
+            // (Actual implementation would compute Jacobians and update H and b)
+        }
+    }
+
+    // Observation factor implementation
+    private static class ObservationFactor extends Factor {
+        private int poseIdx, landmarkIdx;
+        private SimpleMatrix measurement, covariance;
+
+        public ObservationFactor(int pIdx, int lIdx, SimpleMatrix z, SimpleMatrix Q) {
+            poseIdx = pIdx;
+            landmarkIdx = lIdx;
+            measurement = z;
+            covariance = Q;
+        }
+
+        @Override
+        public void linearize(List poses, List landmarks,
+                            SimpleMatrix H, SimpleMatrix b) {
+            // Implementation of observation factor linearization
+            // (Actual implementation would compute Jacobians and update H and b)
+        }
+    }
+}
