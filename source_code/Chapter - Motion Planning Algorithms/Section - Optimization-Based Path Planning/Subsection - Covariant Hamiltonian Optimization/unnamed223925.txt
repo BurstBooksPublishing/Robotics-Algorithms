@@ -1,0 +1,60 @@
+import numpy as np
+from scipy.integrate import solve_ivp
+from scipy.optimize import minimize
+
+def covariant_hamiltonian_optimization(initial_path, obstacles, dynamics_func, max_iter=100):
+    """
+    Optimize a robotic path using covariant Hamiltonian mechanics.
+    
+    Args:
+        initial_path (np.ndarray): Initial guess for the path (N x D, where D is state dimension).
+        obstacles (list): List of obstacle functions (each returns penalty if inside).
+        dynamics_func (callable): System dynamics (returns state derivatives).
+        max_iter (int): Maximum optimization iterations.
+    
+    Returns:
+        np.ndarray: Optimized path.
+    """
+    # Define Hamiltonian (kinetic + potential energy)
+    def hamiltonian(q, p):
+        T = 0.5 * np.dot(p, p)  # Kinetic energy
+        V = sum(obs(q) for obs in obstacles)  # Potential from obstacles
+        return T + V
+    
+    # Covariant gradient of Hamiltonian
+    def grad_hamiltonian(q, p):
+        grad_V = np.zeros_like(q)
+        for obs in obstacles:
+            grad_V += obs.gradient(q)  # Sum obstacle gradients
+        return np.concatenate([p, -grad_V])
+    
+    # Path cost function (action integral)
+    def path_cost(path):
+        cost = 0.0
+        for i in range(len(path) - 1):
+            q = path[i]
+            p = (path[i+1] - path[i])  # Momentum approximation
+            cost += hamiltonian(q, p)
+        return cost
+    
+    # Optimization via adjoint method
+    def adjoint_dynamics(t, y):
+        q, p, lam_q, lam_p = np.split(y, 4)
+        dH_dq, dH_dp = np.split(grad_hamiltonian(q, p), 2)
+        return np.concatenate([
+            dH_dp,               # dq/dt = ∂H/∂p
+            -dH_dq,              # dp/dt = -∂H/∂q
+            -lam_p @ dH_dq,      # Adjoint equations
+            lam_q - lam_p @ dH_dp
+        ])
+    
+    # Optimize using L-BFGS-B
+    res = minimize(
+        lambda x: path_cost(x.reshape(initial_path.shape)),
+        initial_path.flatten(),
+        jac='3-point',
+        method='L-BFGS-B',
+        options={'maxiter': max_iter}
+    )
+    
+    return res.x.reshape(initial_path.shape)
