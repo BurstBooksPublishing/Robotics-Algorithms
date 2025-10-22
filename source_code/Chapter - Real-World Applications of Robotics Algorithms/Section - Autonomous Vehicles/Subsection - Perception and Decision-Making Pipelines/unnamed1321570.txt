@@ -1,0 +1,96 @@
+import numpy as np
+import cv2
+from sklearn.cluster import DBSCAN
+from typing import List, Tuple
+
+class PerceptionPipeline:
+    def __init__(self, camera_params: dict):
+        """Initialize perception pipeline with camera calibration parameters."""
+        self.camera_matrix = np.array(camera_params["matrix"])
+        self.dist_coeffs = np.array(camera_params["dist_coeffs"])
+
+    def preprocess_frame(self, frame: np.ndarray) -> np.ndarray:
+        """Undistort and preprocess raw camera frame."""
+        undistorted = cv2.undistort(frame, self.camera_matrix, self.dist_coeffs)
+        gray = cv2.cvtColor(undistorted, cv2.COLOR_BGR2GRAY)
+        return cv2.GaussianBlur(gray, (5, 5), 0)
+
+    def detect_obstacles(self, frame: np.ndarray) -> List[Tuple[float, float]]:
+        """Detect obstacles using edge detection and clustering."""
+        edges = cv2.Canny(frame, 50, 150)
+        contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Extract obstacle centroids
+        centroids = []
+        for cnt in contours:
+            if cv2.contourArea(cnt) > 100:  # Filter small noise
+                M = cv2.moments(cnt)
+                if M["m00"] != 0:
+                    cx = int(M["m10"] / M["m00"])
+                    cy = int(M["m01"] / M["m00"])
+                    centroids.append((cx, cy))
+        
+        # Cluster nearby obstacles
+        if len(centroids) > 0:
+            clustering = DBSCAN(eps=50, min_samples=1).fit(centroids)
+            unique_labels = set(clustering.labels_)
+            clustered_obstacles = []
+            for label in unique_labels:
+                cluster_points = np.array(centroids)[clustering.labels_ == label]
+                clustered_obstacles.append(tuple(np.mean(cluster_points, axis=0)))
+            return clustered_obstacles
+        return []
+
+
+class DecisionMaker:
+    def __init__(self, safety_margin: float = 1.5):
+        """Initialize decision maker with safety parameters."""
+        self.safety_margin = safety_margin
+
+    def compute_trajectory(self, obstacles: List[Tuple[float, float]], 
+                          goal: Tuple[float, float]) -> List[Tuple[float, float]]:
+        """Compute safe trajectory avoiding obstacles."""
+        if not obstacles:
+            return [goal]  # Direct path if no obstacles
+        
+        # Simple potential field approach
+        current_pos = (0, 0)  # Assuming ego-vehicle at origin
+        repulsive_forces = []
+        
+        for obs in obstacles:
+            dx = current_pos[0] - obs[0]
+            dy = current_pos[1] - obs[1]
+            dist = np.sqrt(dx**2 + dy**2)
+            if dist < self.safety_margin * 100:  # 100 pixels as danger zone
+                strength = min(1.0, (self.safety_margin * 100) / dist - 1)
+                repulsive_forces.append((strength * dx/dist, strength * dy/dist))
+        
+        # Combine forces and move toward goal
+        net_force = np.sum(repulsive_forces, axis=0) if repulsive_forces else (0, 0)
+        adjusted_goal = (
+            goal[0] + net_force[0] * 50,  # Scale force effect
+            goal[1] + net_force[1] * 50
+        )
+        return [adjusted_goal]
+
+
+# Example usage for autonomous vehicle
+if __name__ == "__main__":
+    camera_params = {
+        "matrix": [[800, 0, 320], [0, 800, 240], [0, 0, 1]],
+        "dist_coeffs": [-0.2, 0.03, 0, 0, 0]
+    }
+    
+    perception = PerceptionPipeline(camera_params)
+    decision_maker = DecisionMaker()
+    
+    # Simulate frame processing
+    dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.circle(dummy_frame, (400, 300), 30, (255, 255, 255), -1)  # Simulate obstacle
+    
+    processed = perception.preprocess_frame(dummy_frame)
+    obstacles = perception.detect_obstacles(processed)
+    trajectory = decision_maker.compute_trajectory(obstacles, (600, 240))
+    
+    print(f"Detected obstacles: {obstacles}")
+    print(f"Computed trajectory: {trajectory}")
