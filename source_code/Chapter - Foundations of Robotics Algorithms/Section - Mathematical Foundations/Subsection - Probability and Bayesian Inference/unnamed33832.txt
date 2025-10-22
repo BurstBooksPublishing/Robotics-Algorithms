@@ -1,0 +1,55 @@
+import numpy as np
+from scipy.stats import beta, norm
+
+class BayesianInference:
+    """A class for Bayesian inference in robotics applications."""
+    
+    def __init__(self, prior_alpha=1, prior_beta=1):
+        """Initialize with uniform Beta prior by default."""
+        self.alpha = prior_alpha
+        self.beta = prior_beta
+    
+    def update_belief(self, successes, failures):
+        """Update Beta distribution with observed successes/failures."""
+        self.alpha += successes
+        self.beta += failures
+    
+    def get_posterior(self):
+        """Return posterior distribution as a Beta object."""
+        return beta(self.alpha, self.beta)
+    
+    def predict_success_prob(self):
+        """Predict probability of success (mean of posterior)."""
+        return self.alpha / (self.alpha + self.beta)
+
+def kalman_filter(mu_prev, sigma_prev, z, R, motion_model=(0, 1)):
+    """
+    Basic Kalman Filter for state estimation.
+    Args:
+        mu_prev: Previous state estimate
+        sigma_prev: Previous uncertainty
+        z: Measurement
+        R: Measurement noise
+        motion_model: (mu_motion, sigma_motion)
+    """
+    # Prediction step
+    mu_pred = mu_prev + motion_model[0]
+    sigma_pred = sigma_prev + motion_model[1]
+    
+    # Update step (Bayesian update)
+    K = sigma_pred / (sigma_pred + R)  # Kalman gain
+    mu = mu_pred + K * (z - mu_pred)
+    sigma = (1 - K) * sigma_pred
+    
+    return mu, sigma
+
+# Example usage for sensor fusion
+if __name__ == "__main__":
+    # Bayesian inference for binary events (e.g., sensor reliability)
+    sensor = BayesianInference()
+    sensor.update_belief(8, 2)  # 8 successes, 2 failures
+    print(f"Sensor reliability: {sensor.predict_success_prob():.2f}")
+    
+    # Kalman filter for state estimation
+    mu, sigma = kalman_filter(mu_prev=10, sigma_prev=4, z=12, R=2)
+    print(f"Updated state estimate: μ={mu:.2f}, σ²={sigma:.2f}")
