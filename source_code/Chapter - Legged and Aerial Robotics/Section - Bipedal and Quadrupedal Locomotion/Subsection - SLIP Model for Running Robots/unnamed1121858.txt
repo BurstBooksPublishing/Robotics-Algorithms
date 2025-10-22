@@ -1,0 +1,80 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.integrate import solve_ivp
+
+class SLIPModel:
+    """Spring-Loaded Inverted Pendulum (SLIP) model for running robots."""
+    
+    def __init__(self, mass=1.0, spring_constant=100.0, rest_length=1.0, gravity=9.81):
+        """Initialize SLIP model parameters."""
+        self.mass = mass
+        self.k = spring_constant
+        self.L0 = rest_length
+        self.g = gravity
+    
+    def flight_dynamics(self, t, state):
+        """Dynamics during flight phase (ballistic motion)."""
+        x, y, vx, vy = state
+        dxdt = vx
+        dydt = vy
+        dvxdt = 0.0
+        dvydt = -self.g
+        return [dxdt, dydt, dvxdt, dvydt]
+    
+    def stance_dynamics(self, t, state):
+        """Dynamics during stance phase (spring compression)."""
+        x, y, vx, vy = state
+        L = np.sqrt(x**2 + y**2)  # Current spring length
+        F_spring = self.k * (self.L0 - L)  # Spring force (Hooke's law)
+        Fx = F_spring * (x / L)  # Horizontal component
+        Fy = F_spring * (y / L)  # Vertical component
+        
+        dxdt = vx
+        dydt = vy
+        dvxdt = Fx / self.mass
+        dvydt = (Fy / self.mass) - self.g
+        return [dxdt, dydt, dvxdt, dvydt]
+    
+    def simulate(self, initial_state, t_span, flight_events=None):
+        """Simulate SLIP model over given time span with phase transitions."""
+        if flight_events is None:
+            flight_events = [self.detect_touchdown, self.detect_liftoff]
+        
+        sol = solve_ivp(
+            self.flight_dynamics,
+            t_span,
+            initial_state,
+            events=flight_events,
+            dense_output=True
+        )
+        return sol
+    
+    def detect_touchdown(self, t, state):
+        """Event function to detect touchdown (y <= L0*sin(theta))."""
+        y = state[1]
+        return y - self.L0 * np.sin(np.pi/4)  # Example: 45° touchdown angle
+    
+    def detect_liftoff(self, t, state):
+        """Event function to detect liftoff (spring returns to rest length)."""
+        x, y = state[0], state[1]
+        L = np.sqrt(x**2 + y**2)
+        return L - self.L0  # Liftoff when spring is relaxed
+
+# Example usage
+if __name__ == "__main__":
+    slip = SLIPModel()
+    initial_state = [0.5, 1.5, 2.0, 0.0]  # [x, y, vx, vy]
+    t_span = (0, 2)  # Simulation time
+    
+    # Run simulation
+    sol = slip.simulate(initial_state, t_span)
+    
+    # Plot results
+    plt.figure(figsize=(10, 6))
+    plt.plot(sol.y[0], sol.y[1], label='SLIP trajectory')
+    plt.xlabel('Horizontal Position (m)')
+    plt.ylabel('Vertical Position (m)')
+    plt.title('SLIP Model Simulation')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
