@@ -1,0 +1,72 @@
+import java.util.*;
+import org.tensorflow.*;
+import org.tensorflow.ndarray.*;
+import org.tensorflow.op.*;
+import org.tensorflow.types.*;
+
+/**
+ * AI-Assisted Prosthetic Control System
+ * Simulates real-time EMG signal processing and prosthetic movement prediction
+ * using TensorFlow for Java in a medical robotics context.
+ */
+public class ProstheticController {
+    private SavedModelBundle model;  // Pre-trained TensorFlow model
+    private final int INPUT_SIZE = 8;  // EMG channels count
+
+    public ProstheticController(String modelPath) {
+        // Load pre-trained neural network model for gesture classification
+        this.model = SavedModelBundle.load(modelPath, "serve");
+    }
+
+    /**
+     * Processes EMG signals and returns predicted prosthetic movement
+     * @param emgSignals Raw EMG data (8 channels)
+     * @return Predicted movement class (0-5)
+     */
+    public int predictMovement(double[] emgSignals) {
+        try (Tensor input = preprocessInput(emgSignals);
+             Tensor output = model.session()
+                     .runner()
+                     .feed("emg_input", input)
+                     .fetch("prediction")
+                     .run()
+                     .get(0)
+                     .expect(Float.class)) {
+
+            // Get predicted class with highest probability
+            NdArray outputArray = output.asNdArray();
+            return argMax(outputArray);
+        }
+    }
+
+    private Tensor preprocessInput(double[] signals) {
+        // Normalize and convert EMG signals to TensorFlow tensor
+        float[] normalized = new float[INPUT_SIZE];
+        for (int i = 0; i < INPUT_SIZE; i++) {
+            normalized[i] = (float)((signals[i] - 128) / 255.0);  // Normalize to [-0.5,0.5]
+        }
+        return Tensors.of(Shape.of(1, INPUT_SIZE), FloatNdArray.of(normalized));
+    }
+
+    private int argMax(NdArray array) {
+        // Find index of maximum value in output array
+        int maxIndex = 0;
+        for (int i = 1; i < array.shape().get(1); i++) {
+            if (array.getFloat(0, i) > array.getFloat(0, maxIndex)) {
+                maxIndex = i;
+            }
+        }
+        return maxIndex;
+    }
+
+    public static void main(String[] args) {
+        // Example usage
+        ProstheticController controller = new ProstheticController("path/to/model");
+        
+        // Simulated EMG data (8 channels)
+        double[] testSignals = {150, 90, 200, 110, 180, 95, 210, 120};
+        
+        int predictedMovement = controller.predictMovement(testSignals);
+        System.out.println("Predicted movement class: " + predictedMovement);
+    }
+}
