@@ -1,0 +1,66 @@
+import heapq
+
+def a_star(start, goal, grid, heuristic):
+    """
+    A* Algorithm for pathfinding in a 2D grid.
+    
+    Args:
+        start: Tuple (x, y) representing the starting position.
+        goal: Tuple (x, y) representing the target position.
+        grid: 2D list representing the environment (0 = free, 1 = obstacle).
+        heuristic: Function to estimate cost from a node to the goal.
+    
+    Returns:
+        List of tuples representing the path from start to goal.
+    """
+    # Priority queue for open nodes: (f_score, x, y)
+    open_set = []
+    heapq.heappush(open_set, (0, start[0], start[1]))
+    
+    # Dictionaries to keep track of path and costs
+    came_from = {}
+    g_score = {start: 0}  # Cost from start to current node
+    f_score = {start: heuristic(start, goal)}  # Estimated total cost
+    
+    # Directions for 8-way movement (dx, dy, cost)
+    directions = [(-1, -1, 1.4), (-1, 0, 1), (-1, 1, 1.4),
+                  (0, -1, 1), (0, 1, 1),
+                  (1, -1, 1.4), (1, 0, 1), (1, 1, 1.4)]
+    
+    while open_set:
+        _, current_x, current_y = heapq.heappop(open_set)
+        current = (current_x, current_y)
+        
+        if current == goal:
+            # Reconstruct path if goal is reached
+            path = []
+            while current in came_from:
+                path.append(current)
+                current = came_from[current]
+            path.append(start)
+            path.reverse()
+            return path
+        
+        for dx, dy, cost in directions:
+            neighbor = (current_x + dx, current_y + dy)
+            
+            # Check if neighbor is within grid bounds and not an obstacle
+            if (0 <= neighbor[0] < len(grid) and 
+                0 <= neighbor[1] < len(grid[0]) and 
+                grid[neighbor[0]][neighbor[1]] == 0):
+                
+                # Calculate tentative g_score
+                tentative_g = g_score[current] + cost
+                
+                if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                    # Update path and scores
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g
+                    f_score[neighbor] = tentative_g + heuristic(neighbor, goal)
+                    heapq.heappush(open_set, (f_score[neighbor], neighbor[0], neighbor[1]))
+    
+    return None  # No path found
+
+# Example heuristic (Euclidean distance)
+def euclidean_distance(a, b):
+    return ((a[0] - b[0])**2 + (a[1] - b[1])**2)**0.5
