@@ -1,0 +1,67 @@
+import java.util.*;
+import org.apache.commons.math3.stat.regression.SimpleRegression;
+
+/**
+ * PredictiveModelingHRInteraction - A class for predicting human-robot interaction 
+ * trajectories using linear regression.
+ * Context: Robotics Algorithms - Chapter 8: Human-Robot Interaction and Haptics.
+ */
+public class PredictiveModelingHRInteraction {
+    private SimpleRegression trajectoryPredictor;
+    private Queue recentHumanPositions; // Stores recent human positions (x-coordinates)
+    private final int WINDOW_SIZE = 5; // Sliding window size for prediction
+
+    public PredictiveModelingHRInteraction() {
+        trajectoryPredictor = new SimpleRegression();
+        recentHumanPositions = new LinkedList<>();
+    }
+
+    /**
+     * Updates the model with new human position data and predicts robot's next position.
+     * @param humanPosition Current human position (x-coordinate)
+     * @return Predicted robot position (x-coordinate)
+     */
+    public double predictInteraction(double humanPosition) {
+        // Add new data point to sliding window
+        if (recentHumanPositions.size() >= WINDOW_SIZE) {
+            recentHumanPositions.poll();
+        }
+        recentHumanPositions.add(humanPosition);
+
+        // Prepare regression data (time-series prediction)
+        double[][] regressionData = new double[recentHumanPositions.size()][2];
+        int index = 0;
+        for (double position : recentHumanPositions) {
+            regressionData[index][0] = index; // Time step
+            regressionData[index][1] = position; // Human position
+            index++;
+        }
+
+        // Update regression model
+        trajectoryPredictor.clear();
+        trajectoryPredictor.addData(regressionData);
+
+        // Predict next human position (one step ahead)
+        double predictedHumanPosition = trajectoryPredictor.predict(index);
+        
+        // Calculate robot response (simple mirroring behavior)
+        double robotPosition = predictedHumanPosition * 0.8; // Dampened response
+        
+        return robotPosition;
+    }
+
+    /**
+     * Main method for testing the predictive model
+     */
+    public static void main(String[] args) {
+        PredictiveModelingHRInteraction model = new PredictiveModelingHRInteraction();
+        
+        // Simulate human movement (sinusoidal pattern)
+        for (int i = 0; i < 10; i++) {
+            double humanPos = Math.sin(i * 0.5) * 10;
+            double robotPos = model.predictInteraction(humanPos);
+            System.out.printf("Step %d: Human=%.2f | Robot=%.2f%n", 
+                i, humanPos, robotPos);
+        }
+    }
+}
