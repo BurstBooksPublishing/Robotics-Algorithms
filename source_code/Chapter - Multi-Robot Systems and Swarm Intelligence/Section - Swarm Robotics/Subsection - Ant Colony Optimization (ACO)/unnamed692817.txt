@@ -1,0 +1,134 @@
+import java.util.*;
+
+public class AntColonyOptimization {
+    private static final int NUM_ANTS = 10;          // Number of ants in the colony
+    private static final int NUM_ITERATIONS = 100;   // Max iterations for optimization
+    private static final double EVAPORATION_RATE = 0.5; // Pheromone evaporation rate
+    private static final double ALPHA = 1.0;         // Pheromone influence factor
+    private static final double BETA = 2.0;          // Heuristic influence factor
+
+    // Represents a path between two nodes (robots/waypoints)
+    static class Edge {
+        double pheromone = 0.1;  // Initial pheromone level
+        final double distance;   // Distance or cost between nodes
+
+        public Edge(double distance) {
+            this.distance = distance;
+        }
+    }
+
+    // Represents an ant (robot) in the colony
+    static class Ant {
+        List visitedNodes = new ArrayList<>();
+        Set unvisitedNodes = new HashSet<>();
+        double pathLength = 0.0;
+
+        public Ant(int numNodes) {
+            for (int i = 0; i < numNodes; i++) {
+                unvisitedNodes.add(i);
+            }
+            // Start from random node
+            int startNode = new Random().nextInt(numNodes);
+            visitedNodes.add(startNode);
+            unvisitedNodes.remove(startNode);
+        }
+
+        // Move to next node based on pheromone trails
+        public void move(Edge[][] graph) {
+            if (unvisitedNodes.isEmpty()) return;
+
+            int currentNode = visitedNodes.get(visitedNodes.size() - 1);
+            Map probabilities = new HashMap<>();
+
+            // Calculate probabilities for all unvisited nodes
+            double total = 0.0;
+            for (int node : unvisitedNodes) {
+                Edge edge = graph[currentNode][node];
+                double prob = Math.pow(edge.pheromone, ALPHA) * 
+                             Math.pow(1.0 / edge.distance, BETA);
+                probabilities.put(node, prob);
+                total += prob;
+            }
+
+            // Select next node using roulette wheel selection
+            double rand = Math.random() * total;
+            double cumulative = 0.0;
+            int nextNode = -1;
+            for (Map.Entry entry : probabilities.entrySet()) {
+                cumulative += entry.getValue();
+                if (cumulative >= rand) {
+                    nextNode = entry.getKey();
+                    break;
+                }
+            }
+
+            // Update ant's path
+            if (nextNode != -1) {
+                Edge edge = graph[currentNode][nextNode];
+                pathLength += edge.distance;
+                visitedNodes.add(nextNode);
+                unvisitedNodes.remove(nextNode);
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        // Example graph representing robot waypoints (simplified)
+        int numNodes = 5;
+        Edge[][] graph = new Edge[numNodes][numNodes];
+        for (int i = 0; i < numNodes; i++) {
+            for (int j = 0; j < numNodes; j++) {
+                if (i != j) {
+                    // Random distance between 1 and 10 for demo
+                    graph[i][j] = new Edge(1 + Math.random() * 9);
+                }
+            }
+        }
+
+        List ants = new ArrayList<>();
+        List bestPath = null;
+        double bestPathLength = Double.MAX_VALUE;
+
+        // Main ACO loop
+        for (int iter = 0; iter < NUM_ITERATIONS; iter++) {
+            ants.clear();
+            for (int i = 0; i < NUM_ANTS; i++) {
+                ants.add(new Ant(numNodes));
+            }
+
+            // Let each ant build its solution
+            for (Ant ant : ants) {
+                while (!ant.unvisitedNodes.isEmpty()) {
+                    ant.move(graph);
+                }
+                // Update best path found
+                if (ant.pathLength < bestPathLength) {
+                    bestPathLength = ant.pathLength;
+                    bestPath = new ArrayList<>(ant.visitedNodes);
+                }
+            }
+
+            // Update pheromones
+            for (int i = 0; i < numNodes; i++) {
+                for (int j = 0; j < numNodes; j++) {
+                    if (i != j) {
+                        // Evaporate existing pheromones
+                        graph[i][j].pheromone *= (1 - EVAPORATION_RATE);
+                    }
+                }
+            }
+
+            // Deposit new pheromones on best path
+            for (int i = 0; i < bestPath.size() - 1; i++) {
+                int from = bestPath.get(i);
+                int to = bestPath.get(i + 1);
+                graph[from][to].pheromone += 1.0 / bestPathLength;
+                graph[to][from].pheromone += 1.0 / bestPathLength; // Undirected graph
+            }
+        }
+
+        // Output best path found (for demonstration)
+        System.out.println("Best path found: " + bestPath);
+        System.out.println("Path length: " + bestPathLength);
+    }
+}
