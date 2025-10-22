@@ -1,0 +1,76 @@
+import numpy as np
+import torch
+import torch.nn as nn
+from sklearn.preprocessing import StandardScaler
+from torch.utils.data import Dataset, DataLoader
+
+# Custom dataset for loading demonstration trajectories
+class DemonstrationDataset(Dataset):
+    def __init__(self, trajectories, scaler=None):
+        """
+        Args:
+            trajectories: List of demonstration trajectories (each trajectory is a numpy array)
+            scaler: Optional scaler for normalizing data
+        """
+        self.trajectories = trajectories
+        self.scaler = scaler or StandardScaler()
+        
+        # Flatten and normalize trajectories
+        flattened = np.vstack(trajectories)
+        self.scaler.fit(flattened)
+        self.normalized = [self.scaler.transform(traj) for traj in trajectories]
+        
+    def __len__(self):
+        return len(self.trajectories)
+    
+    def __getitem__(self, idx):
+        # Convert to PyTorch tensors and add sequence dimension
+        traj = torch.FloatTensor(self.normalized[idx])
+        return traj[:-1], traj[1:]  # (input, target)
+
+# LfD model using LSTM to learn temporal patterns
+class LfDModel(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super().__init__()
+        self.lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, output_dim)
+        
+    def forward(self, x):
+        lstm_out, _ = self.lstm(x)
+        predictions = self.fc(lstm_out)
+        return predictions
+
+# Training loop for LfD
+def train_lfd(model, dataloader, epochs=100, lr=0.001):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    
+    for epoch in range(epochs):
+        for inputs, targets in dataloader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            optimizer.step()
+            
+        print(f"Epoch {epoch+1}/{epochs}, Loss: {loss.item():.4f}")
+
+# Example usage
+if __name__ == "__main__":
+    # Sample demonstration trajectories (position, velocity)
+    demo_trajs = [
+        np.array([[0.1, 0.5], [0.2, 0.4], [0.3, 0.3]]),
+        np.array([[0.4, 0.2], [0.5, 0.1], [0.6, 0.0]])
+    ]
+    
+    # Prepare dataset and dataloader
+    dataset = DemonstrationDataset(demo_trajs)
+    dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
+    
+    # Initialize and train model
+    model = LfDModel(input_dim=2, hidden_dim=32, output_dim=2)
+    train_lfd(model, dataloader, epochs=50)
