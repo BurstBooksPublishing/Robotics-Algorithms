@@ -1,0 +1,101 @@
+/**
+ * Represents a Configuration Space (C-Space) for robotics motion planning.
+ * This class models the space of all possible configurations of a robot,
+ * including constraints like obstacles and joint limits.
+ */
+public class ConfigurationSpace {
+    private int dimensions; // Number of degrees of freedom (DOF)
+    private double[] lowerBounds; // Lower limits for each dimension
+    private double[] upperBounds; // Upper limits for each dimension
+    private List obstacles; // Obstacles in C-Space
+
+    /**
+     * Initializes a C-Space with given dimensions and bounds.
+     * @param dimensions Number of DOF
+     * @param lowerBounds Array of lower bounds for each dimension
+     * @param upperBounds Array of upper bounds for each dimension
+     */
+    public ConfigurationSpace(int dimensions, double[] lowerBounds, double[] upperBounds) {
+        this.dimensions = dimensions;
+        this.lowerBounds = lowerBounds.clone();
+        this.upperBounds = upperBounds.clone();
+        this.obstacles = new ArrayList<>();
+    }
+
+    /**
+     * Checks if a configuration is valid (within bounds and collision-free).
+     * @param config The configuration to validate
+     * @return True if valid, false otherwise
+     */
+    public boolean isValidConfiguration(double[] config) {
+        // Check bounds
+        for (int i = 0; i < dimensions; i++) {
+            if (config[i] < lowerBounds[i] || config[i] > upperBounds[i]) {
+                return false;
+            }
+        }
+        // Check collisions
+        for (Obstacle obstacle : obstacles) {
+            if (obstacle.isInCollision(config)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Adds an obstacle to the C-Space.
+     * @param obstacle The obstacle to add
+     */
+    public void addObstacle(Obstacle obstacle) {
+        obstacles.add(obstacle);
+    }
+
+    /**
+     * Samples a random valid configuration in C-Space.
+     * @return A valid configuration or null if none found after max attempts
+     */
+    public double[] sampleRandomConfig() {
+        Random rand = new Random();
+        double[] config = new double[dimensions];
+        int maxAttempts = 1000;
+
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            // Generate random configuration within bounds
+            for (int i = 0; i < dimensions; i++) {
+                config[i] = lowerBounds[i] + (upperBounds[i] - lowerBounds[i]) * rand.nextDouble();
+            }
+            if (isValidConfiguration(config)) {
+                return config;
+            }
+        }
+        return null;
+    }
+}
+
+/**
+ * Represents an obstacle in C-Space.
+ */
+class Obstacle {
+    private double[] center; // Center of the obstacle
+    private double radius;   // Radius for spherical obstacle
+
+    public Obstacle(double[] center, double radius) {
+        this.center = center.clone();
+        this.radius = radius;
+    }
+
+    /**
+     * Checks if a configuration collides with this obstacle.
+     * @param config The configuration to check
+     * @return True if in collision, false otherwise
+     */
+    public boolean isInCollision(double[] config) {
+        double distanceSquared = 0;
+        for (int i = 0; i < center.length; i++) {
+            double diff = config[i] - center[i];
+            distanceSquared += diff * diff;
+        }
+        return distanceSquared <= (radius * radius);
+    }
+}
