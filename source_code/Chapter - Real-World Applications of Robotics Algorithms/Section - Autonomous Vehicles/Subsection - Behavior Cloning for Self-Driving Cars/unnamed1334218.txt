@@ -1,0 +1,98 @@
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, Flatten, Dense, Lambda, Cropping2D
+from tensorflow.keras.optimizers import Adam
+from sklearn.model_selection import train_test_split
+import cv2
+import pandas as pd
+
+def load_data(data_path):
+    """Load driving log data and image paths."""
+    df = pd.read_csv(data_path + '/driving_log.csv', 
+                     names=['center', 'left', 'right', 'steering', 'throttle', 'reverse', 'speed'])
+    X = df[['center', 'left', 'right']].values
+    y = df['steering'].values
+    return X, y
+
+def preprocess_image(img_path):
+    """Preprocess image: crop, resize, convert to YUV, normalize."""
+    img = cv2.imread(img_path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)  # NVIDIA paper recommends YUV
+    img = img[60:-25, :, :]  # Crop top and bottom
+    img = cv2.resize(img, (200, 66))  # Resize to NVIDIA model input size
+    img = img / 255.0  # Normalize
+    return img
+
+def data_generator(X, y, batch_size=32, is_training=True):
+    """Generator to yield batches of training data with augmentation."""
+    while True:
+        X_batch, y_batch = [], []
+        for i in np.random.randint(0, len(y), batch_size):
+            # Randomly select center, left, or right image
+            camera = np.random.choice(['center', 'left', 'right'])
+            if camera == 'center':
+                img_path = X[i][0]
+                angle = y[i]
+            elif camera == 'left':
+                img_path = X[i][1]
+                angle = y[i] + 0.2  # Steering correction for left camera
+            else:
+                img_path = X[i][2]
+                angle = y[i] - 0.2  # Steering correction for right camera
+            
+            img = preprocess_image(img_path.strip())
+            
+            # Data augmentation: flip image randomly
+            if is_training and np.random.rand() < 0.5:
+                img = cv2.flip(img, 1)
+                angle = -angle
+            
+            X_batch.append(img)
+            y_batch.append(angle)
+        
+        yield np.array(X_batch), np.array(y_batch)
+
+def build_nvidia_model():
+    """Build NVIDIA's end-to-end CNN architecture for self-driving."""
+    model = Sequential([
+        # Normalization layer
+        Lambda(lambda x: (x / 127.5) - 1.0, input_shape=(66, 200, 3)),
+        
+        # Convolutional layers
+        Conv2D(24, (5, 5), strides=(2, 2), activation='elu'),
+        Conv2D(36, (5, 5), strides=(2, 2), activation='elu'),
+        Conv2D(48, (5, 5), strides=(2, 2), activation='elu'),
+        Conv2D(64, (3, 3), activation='elu'),
+        Conv2D(64, (3, 3), activation='elu'),
+        
+        # Fully connected layers
+        Flatten(),
+        Dense(100, activation='elu'),
+        Dense(50, activation='elu'),
+        Dense(10, activation='elu'),
+        Dense(1)
+    ])
+    
+    model.compile(optimizer=Adam(learning_rate=1e-4), loss='mse')
+    return model
+
+# Main training pipeline
+if __name__ == '__main__':
+    # Load and split data
+    X, y = load_data('data')
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    # Build and train model
+    model = build_nvidia_model()
+    history = model.fit(
+        data_generator(X_train, y_train),
+        steps_per_epoch=len(X_train)//32,
+        validation_data=data_generator(X_val, y_val, is_training=False),
+        validation_steps=len(X_val)//32,
+        epochs=10,
+        verbose=1
+    )
+    
+    # Save model for deployment
+    model.save('behavior_cloning.h5')
