@@ -1,0 +1,75 @@
+// Neural Network for Multimodal Interaction (Gesture + Speech)
+// Robotics Algorithms - Chapter 8: Human-Robot Interaction and Haptics
+
+import org.deeplearning4j.nn.conf.*;
+import org.deeplearning4j.nn.conf.layers.*;
+import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
+import org.deeplearning4j.nn.weights.WeightInit;
+import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.learning.config.Adam;
+import org.nd4j.linalg.lossfunctions.LossFunctions;
+
+public class MultimodalNeuralNet {
+
+    public static MultiLayerNetwork buildModel(int gestureInputSize, int speechInputSize, int numClasses) {
+        // Combined input size for gesture (sensor data) and speech (MFCC features)
+        int combinedInputSize = gestureInputSize + speechInputSize;
+
+        MultiLayerConfiguration config = new NeuralNetConfiguration.Builder()
+            .seed(1234)
+            .weightInit(WeightInit.XAVIER)
+            .updater(new Adam(0.001))
+            .list()
+            // Fusion network architecture
+            .layer(0, new DenseLayer.Builder()
+                .nIn(combinedInputSize)
+                .nOut(256)
+                .activation(Activation.RELU)
+                .build())
+            .layer(1, new DenseLayer.Builder()
+                .nIn(256)
+                .nOut(128)
+                .activation(Activation.RELU)
+                .build())
+            .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
+                .nIn(128)
+                .nOut(numClasses)
+                .activation(Activation.SOFTMAX)
+                .build())
+            .build();
+
+        MultiLayerNetwork model = new MultiLayerNetwork(config);
+        model.init();
+        return model;
+    }
+
+    // Preprocess and fuse multimodal data
+    public static INDArray preprocessData(float[] gestureData, float[] speechFeatures) {
+        // Combine gesture and speech features into single input vector
+        INDArray combined = Nd4j.zeros(1, gestureData.length + speechFeatures.length);
+        combined.put(new INDArrayIndex[]{NDArrayIndex.point(0), NDArrayIndex.interval(0, gestureData.length)},
+                    Nd4j.create(gestureData));
+        combined.put(new INDArrayIndex[]{NDArrayIndex.point(0), NDArrayIndex.interval(gestureData.length, 
+                    gestureData.length + speechFeatures.length)},
+                    Nd4j.create(speechFeatures));
+        return combined;
+    }
+
+    public static void main(String[] args) {
+        // Example usage
+        int gestureDim = 50;  // Dimension of gesture input (e.g., joint angles)
+        int speechDim = 26;   // Dimension of speech features (e.g., MFCCs)
+        int outputClasses = 10; // Number of interaction commands
+        
+        MultiLayerNetwork model = buildModel(gestureDim, speechDim, outputClasses);
+        
+        // Simulated input data
+        float[] sampleGesture = new float[gestureDim];
+        float[] sampleSpeech = new float[speechDim];
+        
+        // Preprocess and predict
+        INDArray input = preprocessData(sampleGesture, sampleSpeech);
+        INDArray output = model.output(input);
+        System.out.println("Predicted class probabilities: " + output);
+    }
+}
