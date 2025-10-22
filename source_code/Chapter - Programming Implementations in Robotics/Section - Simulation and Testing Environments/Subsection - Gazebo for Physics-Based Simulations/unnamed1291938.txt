@@ -1,0 +1,75 @@
+import org.gazebosim.transport.Node;
+import org.gazebosim.transport.Subscriber;
+import org.gazebosim.transport.Publisher;
+import org.gazebosim.transport.Msg;
+
+/**
+ * Advanced Java example for interfacing with Gazebo in robotics simulations.
+ * Demonstrates physics-based interactions for a robotic arm in Gazebo.
+ * Part of Chapter 11: Programming Implementations in Robotics.
+ */
+public class GazeboRoboticsSimulation {
+
+    private Node node;
+    private Subscriber jointStateSub;
+    private Publisher jointCmdPub;
+
+    // Gazebo topic names for joint control and feedback
+    private static final String JOINT_STATES_TOPIC = "/arm/joint_states";
+    private static final String JOINT_CMD_TOPIC = "/arm/joint_position_controller/command";
+
+    public GazeboRoboticsSimulation() {
+        try {
+            // Initialize Gazebo communication node
+            node = new Node("robotics_algorithm_node");
+            
+            // Subscribe to joint states for feedback
+            jointStateSub = node.subscribe(
+                JOINT_STATES_TOPIC, 
+                joint_states_msg.class, 
+                this::onJointStateUpdate
+            );
+            
+            // Advertise joint command publisher
+            jointCmdPub = node.advertise(
+                JOINT_CMD_TOPIC, 
+                std_msgs.Float64.class
+            );
+            
+            System.out.println("Gazebo interface initialized");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Callback for joint state updates
+    private void onJointStateUpdate(joint_states_msg msg) {
+        // Process real-time joint data for control algorithms
+        double[] positions = msg.getPosition();
+        // Implement control logic here (e.g., PID, IK)
+    }
+
+    // Send joint position command to Gazebo
+    public void setJointPosition(int jointIndex, double position) {
+        std_msgs.Float64 cmd = new std_msgs.Float64();
+        cmd.setData(position);
+        jointCmdPub.publish(cmd);
+    }
+
+    // Main simulation loop
+    public void runSimulation() {
+        // Example: Move joint 0 to 1.57 radians (90 degrees)
+        setJointPosition(0, 1.57);
+        
+        // Main control loop would go here
+        while (true) {
+            // Implement robotics algorithm logic
+            // ...
+        }
+    }
+
+    public static void main(String[] args) {
+        GazeboRoboticsSimulation sim = new GazeboRoboticsSimulation();
+        sim.runSimulation();
+    }
+}
