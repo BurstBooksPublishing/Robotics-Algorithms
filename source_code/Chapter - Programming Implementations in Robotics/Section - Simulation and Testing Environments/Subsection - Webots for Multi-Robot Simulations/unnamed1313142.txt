@@ -1,0 +1,49 @@
+import com.cyberbotics.webots.controller.Robot;
+import com.cyberbotics.webots.controller.Supervisor;
+import com.cyberbotics.webots.controller.Node;
+
+/**
+ * Multi-robot simulation in Webots for coordinated exploration.
+ * Demonstrates basic swarm communication and collision avoidance.
+ */
+public class MultiRobotSwarm {
+
+    private static final int TIME_STEP = 32; // Simulation time step (ms)
+    private static final String ROBOT_NAMES[] = {"robot1", "robot2", "robot3"};
+
+    public static void main(String[] args) {
+        // Initialize supervisor for global coordination
+        Supervisor supervisor = new Supervisor();
+        
+        // Initialize robot swarm
+        Robot[] robots = new Robot[ROBOT_NAMES.length];
+        for (int i = 0; i < ROBOT_NAMES.length; i++) {
+            robots[i] = new Robot(ROBOT_NAMES[i]);
+        }
+
+        // Main simulation loop
+        while (supervisor.step(TIME_STEP) != -1) {
+            // Get simulation time (for synchronization)
+            double simTime = supervisor.getTime();
+            
+            // Coordinate swarm behavior
+            for (Robot robot : robots) {
+                // Basic collision avoidance
+                Node robotNode = supervisor.getFromDef(robot.getName());
+                double[] position = robotNode.getPosition();
+                
+                // Broadcast position to other robots (simulated communication)
+                for (Robot other : robots) {
+                    if (!robot.equals(other)) {
+                        // In real implementation: use emitter/receiver devices
+                        System.out.printf("[%.2fs] %s -> %s: Position (%.2f,%.2f)%n",
+                            simTime, robot.getName(), other.getName(), position[0], position[1]);
+                    }
+                }
+                
+                // Simple movement algorithm (replace with actual swarm logic)
+                robot.setSpeed(1.0, 0.5); // Linear and angular velocity
+            }
+        }
+    }
+}
