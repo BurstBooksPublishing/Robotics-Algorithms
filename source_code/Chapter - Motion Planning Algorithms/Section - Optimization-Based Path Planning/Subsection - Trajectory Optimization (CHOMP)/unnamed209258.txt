@@ -1,0 +1,85 @@
+import numpy as np
+from scipy.optimize import minimize
+
+class CHOMP:
+    def __init__(self, start, goal, obstacles, num_waypoints=50):
+        """
+        Initialize CHOMP trajectory optimizer.
+        
+        Args:
+            start (np.array): Start position (n-dimensional).
+            goal (np.array): Goal position (n-dimensional).
+            obstacles (list): List of obstacle positions and radii [(pos, radius), ...].
+            num_waypoints (int): Number of waypoints in the trajectory.
+        """
+        self.start = start
+        self.goal = goal
+        self.obstacles = obstacles
+        self.num_waypoints = num_waypoints
+        self.dim = len(start)
+        
+        # Initialize trajectory (straight line from start to goal)
+        self.trajectory = np.linspace(start, goal, num_waypoints)
+        
+    def cost_function(self, trajectory_flat):
+        """
+        CHOMP cost function combining smoothness and obstacle avoidance.
+        
+        Args:
+            trajectory_flat (np.array): Flattened trajectory vector.
+            
+        Returns:
+            float: Total cost (smoothness + obstacle cost).
+        """
+        trajectory = trajectory_flat.reshape((self.num_waypoints, self.dim))
+        
+        # Smoothness cost (acceleration penalty)
+        acc = np.diff(trajectory, n=2, axis=0)
+        smooth_cost = 0.5 * np.sum(acc**2)
+        
+        # Obstacle cost
+        obs_cost = 0.0
+        for i in range(1, self.num_waypoints-1):
+            for (obs_pos, radius) in self.obstacles:
+                dist = np.linalg.norm(trajectory[i] - obs_pos)
+                if dist < radius:
+                    obs_cost += (radius - dist)**2
+                    
+        return smooth_cost + obs_cost
+    
+    def optimize(self, max_iter=100):
+        """
+        Optimize the trajectory using L-BFGS-B.
+        
+        Args:
+            max_iter (int): Maximum optimization iterations.
+            
+        Returns:
+            np.array: Optimized trajectory.
+        """
+        # Flatten trajectory for optimization
+        x0 = self.trajectory.flatten()
+        
+        # Set bounds (optional, can constrain workspace)
+        bounds = [(None, None)] * len(x0)
+        
+        # Run optimization
+        res = minimize(self.cost_function, x0, method='L-BFGS-B',
+                       bounds=bounds, options={'maxiter': max_iter})
+        
+        # Reshape and return optimized trajectory
+        self.trajectory = res.x.reshape((self.num_waypoints, self.dim))
+        return self.trajectory
+
+# Example usage
+if __name__ == "__main__":
+    # Define problem
+    start = np.array([0, 0])
+    goal = np.array([10, 10])
+    obstacles = [(np.array([5, 5]), 2.0), (np.array([7, 3]), 1.5)]
+    
+    # Optimize trajectory
+    chomp = CHOMP(start, goal, obstacles)
+    optimized_traj = chomp.optimize()
+    
+    print("Optimized trajectory:\n", optimized_traj)
