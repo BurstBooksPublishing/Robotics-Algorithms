@@ -1,0 +1,84 @@
+// Autonomous Vehicle Perception and Decision-Making Pipeline
+import java.util.List;
+import java.util.ArrayList;
+
+public class AutonomousVehiclePipeline {
+    // Sensor data processing module
+    public static class SensorData {
+        private List lidarData;
+        private List cameraData;
+        private List radarData;
+
+        public SensorData(List lidar, List camera, List radar) {
+            this.lidarData = lidar;
+            this.cameraData = camera;
+            this.radarData = radar;
+        }
+
+        // Fuse sensor data for comprehensive perception
+        public List fuseSensorData() {
+            List fusedData = new ArrayList<>();
+            // Simple fusion logic (weighted average for demonstration)
+            for (int i = 0; i < lidarData.size(); i++) {
+                double fusedValue = (lidarData.get(i) * 0.5) + 
+                                  (cameraData.get(i) * 0.3) + 
+                                  (radarData.get(i) * 0.2);
+                fusedData.add(fusedValue);
+            }
+            return fusedData;
+        }
+    }
+
+    // Decision-making module
+    public static class DecisionEngine {
+        private double safetyThreshold;
+        private double efficiencyWeight;
+
+        public DecisionEngine(double safety, double efficiency) {
+            this.safetyThreshold = safety;
+            this.efficiencyWeight = efficiency;
+        }
+
+        // Determine optimal action based on perceived environment
+        public String makeDecision(List perceivedEnvironment) {
+            double riskScore = calculateRiskScore(perceivedEnvironment);
+            double efficiencyScore = calculateEfficiencyScore(perceivedEnvironment);
+
+            if (riskScore > safetyThreshold) {
+                return "EmergencyStop";
+            } else if (efficiencyScore * efficiencyWeight > riskScore) {
+                return "ProceedOptimalPath";
+            } else {
+                return "ProceedSafePath";
+            }
+        }
+
+        private double calculateRiskScore(List data) {
+            // Simplified risk assessment
+            return data.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+        }
+
+        private double calculateEfficiencyScore(List data) {
+            // Simplified efficiency calculation
+            return 1.0 / (data.size() > 0 ? data.get(0) : 1.0);
+        }
+    }
+
+    // Main pipeline execution
+    public static void main(String[] args) {
+        // Simulated sensor inputs
+        List lidar = List.of(0.8, 0.5, 0.3);
+        List camera = List.of(0.7, 0.6, 0.4);
+        List radar = List.of(0.9, 0.4, 0.2);
+
+        // Initialize pipeline components
+        SensorData sensors = new SensorData(lidar, camera, radar);
+        DecisionEngine decisionEngine = new DecisionEngine(0.6, 0.8);
+
+        // Execute perception and decision-making
+        List environment = sensors.fuseSensorData();
+        String action = decisionEngine.makeDecision(environment);
+
+        System.out.println("Selected action: " + action);
+    }
+}
