@@ -1,0 +1,65 @@
+import numpy as np
+from scipy.integrate import odeint
+
+class AdmittanceController:
+    """Admittance control for compliant robot behavior."""
+    def __init__(self, mass, damping, stiffness):
+        self.M = mass    # Virtual mass (kg)
+        self.B = damping  # Virtual damping (N.s/m)
+        self.K = stiffness  # Virtual stiffness (N/m)
+    
+    def compute_velocity(self, force, dt, current_velocity):
+        """Compute desired velocity from external force using admittance model."""
+        # Admittance model: M*dv/dt + B*v + K*x = F_ext
+        acceleration = (force - self.B * current_velocity) / self.M
+        new_velocity = current_velocity + acceleration * dt
+        return new_velocity
+
+class ImpedanceController:
+    """Impedance control for stable interaction with environment."""
+    def __init__(self, mass, damping, stiffness):
+        self.M = mass    # Virtual mass (kg)
+        self.B = damping  # Virtual damping (N.s/m)
+        self.K = stiffness  # Virtual stiffness (N/m)
+    
+    def compute_force(self, position_error, velocity_error):
+        """Compute interaction force using impedance model."""
+        # Impedance model: F = M*ddx + B*dx + K*x
+        return self.M * velocity_error + self.B * velocity_error + self.K * position_error
+
+def haptic_loop():
+    """Simulate haptic interaction with admittance/impedance control."""
+    # Initialize controllers
+    admittance_ctrl = AdmittanceController(mass=0.5, damping=5.0, stiffness=20.0)
+    impedance_ctrl = ImpedanceController(mass=0.5, damping=5.0, stiffness=20.0)
+    
+    # Simulation parameters
+    dt = 0.001  # Time step (s)
+    duration = 5.0  # Simulation duration (s)
+    steps = int(duration / dt)
+    
+    # Initialize state variables
+    position = 0.0
+    velocity = 0.0
+    force = 0.0
+    
+    # Simulation loop
+    for i in range(steps):
+        # Simulate human force input (sinusoidal for demo)
+        human_force = 2.0 * np.sin(2 * np.pi * 0.5 * i * dt)
+        
+        # Admittance control: convert force to motion
+        velocity = admittance_ctrl.compute_velocity(human_force, dt, velocity)
+        position += velocity * dt
+        
+        # Impedance control: generate feedback force
+        desired_position = 0.1 * np.sin(2 * np.pi * 0.2 * i * dt)
+        position_error = desired_position - position
+        force = impedance_ctrl.compute_force(position_error, velocity)
+        
+        # In real implementation, would send force to haptic device
+        if i % 100 == 0:
+            print(f"Time: {i*dt:.2f}s | Position: {position:.4f} | Force: {force:.4f}N")
+
+if __name__ == "__main__":
+    haptic_loop()
