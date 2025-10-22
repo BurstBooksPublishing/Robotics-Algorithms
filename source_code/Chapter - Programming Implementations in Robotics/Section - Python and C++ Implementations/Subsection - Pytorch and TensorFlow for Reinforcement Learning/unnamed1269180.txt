@@ -1,0 +1,47 @@
+# PyTorch Implementation for DQN (Deep Q-Network) in Robotics
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+
+class DQN(nn.Module):
+    """Deep Q-Network for robotic control using PyTorch."""
+    def __init__(self, state_dim, action_dim):
+        super(DQN, self).__init__()
+        self.fc1 = nn.Linear(state_dim, 64)  # Input layer
+        self.fc2 = nn.Linear(64, 64)         # Hidden layer
+        self.fc3 = nn.Linear(64, action_dim) # Output layer
+
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        return self.fc3(x)
+
+# TensorFlow Implementation for PPO (Proximal Policy Optimization) in Robotics
+import tensorflow as tf
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.optimizers import Adam
+
+class PPONetwork(tf.keras.Model):
+    """Actor-Critic network for robotic PPO using TensorFlow."""
+    def __init__(self, state_dim, action_dim):
+        super(PPONetwork, self).__init__()
+        self.dense1 = Dense(64, activation='relu')  # Shared feature layer
+        self.dense2 = Dense(64, activation='relu')
+        self.actor = Dense(action_dim, activation='softmax')  # Policy head
+        self.critic = Dense(1)                                # Value head
+
+    def call(self, inputs):
+        x = self.dense1(inputs)
+        x = self.dense2(x)
+        return self.actor(x), self.critic(x)
+
+# Example usage for PyTorch DQN
+state_dim = 10  # Robot state dimensionality (e.g., joint angles + velocities)
+action_dim = 4  # Robot action dimensionality (e.g., motor torques)
+dqn = DQN(state_dim, action_dim)
+optimizer = optim.Adam(dqn.parameters(), lr=1e-3)
+
+# Example usage for TensorFlow PPO
+ppo_model = PPONetwork(state_dim, action_dim)
+ppo_optimizer = Adam(learning_rate=3e-4)
