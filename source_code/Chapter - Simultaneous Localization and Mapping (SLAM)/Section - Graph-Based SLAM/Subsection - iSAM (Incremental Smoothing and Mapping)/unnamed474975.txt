@@ -1,0 +1,53 @@
+import numpy as np
+import gtsam
+
+def incremental_slam(measurements, initial_estimate, noise_models):
+    """
+    Incremental SLAM using iSAM2 for graph optimization.
+    
+    Args:
+        measurements: List of tuples (odometry/landmark measurements).
+        initial_estimate: Initial values for poses and landmarks.
+        noise_models: Dictionary of noise models for odometry/landmarks.
+    """
+    # Initialize iSAM2 parameters
+    parameters = gtsam.ISAM2Params()
+    parameters.setRelinearizeThreshold(0.1)
+    parameters.setRelinearizeSkip(1)
+    isam = gtsam.ISAM2(parameters)
+    
+    # Create factor graph and values
+    graph = gtsam.NonlinearFactorGraph()
+    values = gtsam.Values()
+    
+    # Add prior on the first pose
+    prior_noise = noise_models["prior"]
+    graph.add(gtsam.PriorFactorPose2(1, initial_estimate.atPose2(1), prior_noise))
+    values.insert(1, initial_estimate.atPose2(1))
+    
+    # Process measurements incrementally
+    for i, (odom, landmarks) in enumerate(measurements):
+        # Add odometry factor between consecutive poses
+        if i > 0:
+            graph.add(gtsam.BetweenFactorPose2(
+                i, i+1, odom, noise_models["odometry"]))
+            values.insert(i+1, values.atPose2(i).compose(odom))
+        
+        # Add landmark observations
+        for landmark_id, measurement in landmarks:
+            if landmark_id not in values.keys():
+                # Initialize landmark if not exists
+                values.insert(landmark_id, initial_estimate.atPoint2(landmark_id))
+            graph.add(gtsam.BearingRangeFactor2D(
+                i+1, landmark_id, measurement[0], measurement[1], noise_models["landmark"]))
+        
+        # Update iSAM2 incrementally
+        isam.update(graph, values)
+        current_estimate = isam.calculateEstimate()
+        
+        # Reset for next iteration
+        graph.resize(0)
+        values.clear()
+        values.insert(current_estimate)
+    
+    return isam.calculateEstimate()
