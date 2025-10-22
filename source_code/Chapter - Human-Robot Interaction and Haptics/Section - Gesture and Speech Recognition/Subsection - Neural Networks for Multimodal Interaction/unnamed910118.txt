@@ -1,0 +1,86 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
+import numpy as np
+
+# Custom dataset for multimodal (gesture + speech) data
+class MultimodalDataset(Dataset):
+    def __init__(self, gesture_data, speech_data, labels):
+        self.gesture_data = torch.FloatTensor(gesture_data)
+        self.speech_data = torch.FloatTensor(speech_data)
+        self.labels = torch.LongTensor(labels)
+        
+    def __len__(self):
+        return len(self.labels)
+    
+    def __getitem__(self, idx):
+        return self.gesture_data[idx], self.speech_data[idx], self.labels[idx]
+
+# Multimodal fusion neural network
+class MultimodalNN(nn.Module):
+    def __init__(self, gesture_dim, speech_dim, num_classes):
+        super(MultimodalNN, self).__init__()
+        # Gesture processing branch
+        self.gesture_fc1 = nn.Linear(gesture_dim, 128)
+        self.gesture_bn1 = nn.BatchNorm1d(128)
+        self.gesture_fc2 = nn.Linear(128, 64)
+        
+        # Speech processing branch
+        self.speech_fc1 = nn.Linear(speech_dim, 128)
+        self.speech_bn1 = nn.BatchNorm1d(128)
+        self.speech_fc2 = nn.Linear(128, 64)
+        
+        # Fusion layer
+        self.fusion_fc = nn.Linear(128, num_classes)
+        self.dropout = nn.Dropout(0.5)
+        self.relu = nn.ReLU()
+        
+    def forward(self, x_gesture, x_speech):
+        # Process gesture data
+        x_gesture = self.relu(self.gesture_bn1(self.gesture_fc1(x_gesture)))
+        x_gesture = self.dropout(x_gesture)
+        x_gesture = self.relu(self.gesture_fc2(x_gesture))
+        
+        # Process speech data
+        x_speech = self.relu(self.speech_bn1(self.speech_fc1(x_speech)))
+        x_speech = self.dropout(x_speech)
+        x_speech = self.relu(self.speech_fc2(x_speech))
+        
+        # Concatenate features
+        x_fused = torch.cat((x_gesture, x_speech), dim=1)
+        x_fused = self.dropout(x_fused)
+        
+        # Final classification
+        out = self.fusion_fc(x_fused)
+        return out
+
+# Training parameters
+batch_size = 32
+learning_rate = 0.001
+num_epochs = 50
+
+# Example usage (replace with real data)
+gesture_data = np.random.rand(1000, 20)  # 1000 samples, 20 features
+speech_data = np.random.rand(1000, 40)   # 1000 samples, 40 features
+labels = np.random.randint(0, 5, 1000)   # 5 classes
+
+# Create dataset and dataloader
+dataset = MultimodalDataset(gesture_data, speech_data, labels)
+dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+# Initialize model, loss, and optimizer
+model = MultimodalNN(gesture_dim=20, speech_dim=40, num_classes=5)
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+# Training loop
+for epoch in range(num_epochs):
+    for batch_idx, (gesture, speech, target) in enumerate(dataloader):
+        optimizer.zero_grad()
+        outputs = model(gesture, speech)
+        loss = criterion(outputs, target)
+        loss.backward()
+        optimizer.step()
+        
+    print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}')
