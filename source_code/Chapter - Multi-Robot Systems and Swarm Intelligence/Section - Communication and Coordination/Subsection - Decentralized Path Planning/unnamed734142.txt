@@ -1,0 +1,138 @@
+import java.util.*;
+
+/**
+ * Decentralized Path Planning for Multi-Robot Systems
+ * Implements a simple decentralized A* algorithm with local communication.
+ */
+public class DecentralizedPathPlanner {
+    private static final int[][] DIRECTIONS = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}}; // 4-way movement
+    private int robotId;
+    private Map neighborStates; // Stores other robots' positions/goals
+
+    public DecentralizedPathPlanner(int robotId) {
+        this.robotId = robotId;
+        this.neighborStates = new HashMap<>();
+    }
+
+    /**
+     * Updates local knowledge of neighboring robots' states
+     * @param neighborId The ID of the neighboring robot
+     * @param state The current state (position/goal) of the neighbor
+     */
+    public void updateNeighborState(int neighborId, RobotState state) {
+        neighborStates.put(neighborId, state);
+    }
+
+    /**
+     * Decentralized A* path planning with collision avoidance
+     * @param start Initial position
+     * @param goal Target position
+     * @param grid Shared environment map
+     * @return List of coordinates representing the path
+     */
+    public List findPath(int[] start, int[] goal, int[][] grid) {
+        PriorityQueue openSet = new PriorityQueue<>(Comparator.comparingInt(n -> n.f));
+        Map allNodes = new HashMap<>();
+
+        Node startNode = new Node(start[0], start[1], 0, heuristic(start, goal), null);
+        openSet.add(startNode);
+        allNodes.put(start[0] + "," + start[1], startNode);
+
+        while (!openSet.isEmpty()) {
+            Node current = openSet.poll();
+
+            // Goal check
+            if (current.x == goal[0] && current.y == goal[1]) {
+                return reconstructPath(current);
+            }
+
+            // Explore neighbors
+            for (int[] dir : DIRECTIONS) {
+                int nx = current.x + dir[0];
+                int ny = current.y + dir[1];
+
+                // Boundary and obstacle check
+                if (nx < 0 || nx >= grid.length || ny < 0 || ny >= grid[0].length || grid[nx][ny] == 1) {
+                    continue;
+                }
+
+                // Collision avoidance with known neighbors
+                if (isOccupiedByNeighbor(nx, ny)) {
+                    continue;
+                }
+
+                int newG = current.g + 1;
+                String key = nx + "," + ny;
+                Node neighbor = allNodes.getOrDefault(key, new Node(nx, ny));
+
+                if (newG < neighbor.g) {
+                    neighbor.g = newG;
+                    neighbor.f = newG + heuristic(new int[]{nx, ny}, goal);
+                    neighbor.parent = current;
+
+                    if (!openSet.contains(neighbor)) {
+                        openSet.add(neighbor);
+                    }
+                    allNodes.put(key, neighbor);
+                }
+            }
+        }
+        return Collections.emptyList(); // No path found
+    }
+
+    // Checks if position is occupied by any known neighbor
+    private boolean isOccupiedByNeighbor(int x, int y) {
+        for (RobotState state : neighborStates.values()) {
+            if (state.current[0] == x && state.current[1] == y) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Manhattan distance heuristic
+    private int heuristic(int[] a, int[] b) {
+        return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
+    }
+
+    // Reconstructs path from goal node
+    private List reconstructPath(Node goalNode) {
+        List path = new ArrayList<>();
+        Node current = goalNode;
+        while (current != null) {
+            path.add(new int[]{current.x, current.y});
+            current = current.parent;
+        }
+        Collections.reverse(path);
+        return path;
+    }
+
+    // Node class for A* algorithm
+    private static class Node {
+        int x, y, g, f;
+        Node parent;
+
+        Node(int x, int y) {
+            this(x, y, Integer.MAX_VALUE, Integer.MAX_VALUE, null);
+        }
+
+        Node(int x, int y, int g, int f, Node parent) {
+            this.x = x;
+            this.y = y;
+            this.g = g;
+            this.f = f;
+            this.parent = parent;
+        }
+    }
+
+    // Represents state of a robot (current position and goal)
+    public static class RobotState {
+        int[] current;
+        int[] goal;
+
+        public RobotState(int[] current, int[] goal) {
+            this.current = current;
+            this.goal = goal;
+        }
+    }
+}
