@@ -1,0 +1,144 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+import numpy as np
+from collections import deque, namedtuple
+import random
+
+# Define SAC hyperparameters
+BATCH_SIZE = 256
+GAMMA = 0.99
+TAU = 0.005
+ALPHA = 0.2  # Temperature parameter for entropy regularization
+LR_ACTOR = 3e-4
+LR_CRITIC = 3e-4
+HIDDEN_DIM = 256
+REPLAY_BUFFER_SIZE = int(1e6)
+
+# SAC Network Architectures
+class QNetwork(nn.Module):
+    """Critic network (Q-function)"""
+    def __init__(self, state_dim, action_dim):
+        super(QNetwork, self).__init__()
+        self.fc1 = nn.Linear(state_dim + action_dim, HIDDEN_DIM)
+        self.fc2 = nn.Linear(HIDDEN_DIM, HIDDEN_DIM)
+        self.fc3 = nn.Linear(HIDDEN_DIM, 1)
+        
+    def forward(self, state, action):
+        x = torch.cat([state, action], dim=1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        return self.fc3(x)
+
+class GaussianPolicy(nn.Module):
+    """Actor network with stochastic policy"""
+    def __init__(self, state_dim, action_dim):
+        super(GaussianPolicy, self).__init__()
+        self.fc1 = nn.Linear(state_dim, HIDDEN_DIM)
+        self.fc2 = nn.Linear(HIDDEN_DIM, HIDDEN_DIM)
+        self.mean = nn.Linear(HIDDEN_DIM, action_dim)
+        self.log_std = nn.Linear(HIDDEN_DIM, action_dim)
+        
+    def forward(self, state):
+        x = F.relu(self.fc1(state))
+        x = F.relu(self.fc2(x))
+        mean = self.mean(x)
+        log_std = self.log_std(x)
+        log_std = torch.clamp(log_std, min=-20, max=2)
+        return mean, log_std
+        
+    def sample(self, state):
+        mean, log_std = self.forward(state)
+        std = log_std.exp()
+        normal = torch.distributions.Normal(mean, std)
+        x_t = normal.rsample()  # Reparameterization trick
+        action = torch.tanh(x_t)
+        log_prob = normal.log_prob(x_t)
+        log_prob -= torch.log(1 - action.pow(2) + 1e-6)
+        log_prob = log_prob.sum(1, keepdim=True)
+        return action, log_prob
+
+# SAC Agent
+class SACAgent:
+    def __init__(self, state_dim, action_dim):
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        
+        # Initialize networks
+        self.critic1 = QNetwork(state_dim, action_dim)
+        self.critic2 = QNetwork(state_dim, action_dim)
+        self.critic1_target = QNetwork(state_dim, action_dim)
+        self.critic2_target = QNetwork(state_dim, action_dim)
+        self.actor = GaussianPolicy(state_dim, action_dim)
+        
+        # Initialize target networks
+        self.critic1_target.load_state_dict(self.critic1.state_dict())
+        self.critic2_target.load_state_dict(self.critic2.state_dict())
+        
+        # Optimizers
+        self.critic1_optim = optim.Adam(self.critic1.parameters(), LR_CRITIC)
+        self.critic2_optim = optim.Adam(self.critic2.parameters(), LR_CRITIC)
+        self.actor_optim = optim.Adam(self.actor.parameters(), LR_ACTOR)
+        
+        # Replay buffer
+        self.replay_buffer = deque(maxlen=REPLAY_BUFFER_SIZE)
+        self.transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state', 'done'))
+        
+    def store_transition(self, state, action, reward, next_state, done):
+        self.replay_buffer.append(self.transition(state, action, reward, next_state, done))
+        
+    def update(self):
+        if len(self.replay_buffer) < BATCH_SIZE:
+            return
+        
+        # Sample batch from replay buffer
+        transitions = random.sample(self.replay_buffer, BATCH_SIZE)
+        batch = self.transition(*zip(*transitions))
+        
+        state_batch = torch.FloatTensor(np.array(batch.state))
+        action_batch = torch.FloatTensor(np.array(batch.action))
+        reward_batch = torch.FloatTensor(np.array(batch.reward)).unsqueeze(1)
+        next_state_batch = torch.FloatTensor(np.array(batch.next_state))
+        done_batch = torch.FloatTensor(np.array(batch.done)).unsqueeze(1)
+        
+        # Critic update
+        with torch.no_grad():
+            next_action, next_log_prob = self.actor.sample(next_state_batch)
+            q1_next = self.critic1_target(next_state_batch, next_action)
+            q2_next = self.critic2_target(next_state_batch, next_action)
+            q_next = torch.min(q1_next, q2_next) - ALPHA * next_log_prob
+            target_q = reward_batch + (1 - done_batch) * GAMMA * q_next
+        
+        current_q1 = self.critic1(state_batch, action_batch)
+        current_q2 = self.critic2(state_batch, action_batch)
+        
+        critic1_loss = F.mse_loss(current_q1, target_q)
+        critic2_loss = F.mse_loss(current_q2, target_q)
+        
+        self.critic1_optim.zero_grad()
+        critic1_loss.backward()
+        self.critic1_optim.step()
+        
+        self.critic2_optim.zero_grad()
+        critic2_loss.backward()
+        self.critic2_optim.step()
+        
+        # Actor update
+        actions, log_probs = self.actor.sample(state_batch)
+        q1 = self.critic1(state_batch, actions)
+        q2 = self.critic2(state_batch, actions)
+        q = torch.min(q1, q2)
+        
+        actor_loss = (ALPHA * log_probs - q).mean()
+        
+        self.actor_optim.zero_grad()
+        actor_loss.backward()
+        self.actor_optim.step()
+        
+        # Soft update target networks
+        for param, target_param in zip(self.critic1.parameters(), self.critic1_target.parameters()):
+            target_param.data.copy_(TAU * param.data + (1 - TAU) * target_param.data)
+        
+        for param, target_param in zip(self.critic2.parameters(), self.critic2_target.parameters()):
+            target_param.data.copy_(TAU * param.data + (1 - TAU) * target_param.data)
