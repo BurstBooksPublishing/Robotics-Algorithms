@@ -1,0 +1,99 @@
+import numpy as np
+import gym
+from gym import spaces
+from collections import defaultdict
+
+class HierarchicalRLAgent:
+    """A hierarchical reinforcement learning agent for robotics tasks."""
+    
+    def __init__(self, env_name="FetchReach-v1", num_subgoals=3):
+        self.env = gym.make(env_name)
+        self.num_subgoals = num_subgoals
+        
+        # High-level policy (meta-controller) action space: subgoals
+        self.high_level_action_space = spaces.Box(
+            low=self.env.observation_space.low[:3],  # Assume first 3 dims are position
+            high=self.env.observation_space.high[:3],
+            dtype=np.float32
+        )
+        
+        # Low-level policy (controller) action space: robot actions
+        self.low_level_action_space = self.env.action_space
+        
+        # Initialize Q-tables or policy networks for both levels
+        self.high_level_q = defaultdict(lambda: np.zeros(num_subgoals))
+        self.low_level_q = defaultdict(lambda: np.zeros(self.low_level_action_space.shape[0]))
+        
+        # Hyperparameters
+        self.alpha_high = 0.1  # Learning rate for high-level
+        self.alpha_low = 0.1   # Learning rate for low-level
+        self.gamma = 0.99      # Discount factor
+        self.epsilon = 0.1     # Exploration rate
+        
+    def select_high_level_action(self, state):
+        """Epsilon-greedy selection of subgoal."""
+        if np.random.random() < self.epsilon:
+            return np.random.randint(self.num_subgoals)
+        return np.argmax(self.high_level_q[state])
+    
+    def select_low_level_action(self, state, subgoal):
+        """Epsilon-greedy selection of low-level action."""
+        if np.random.random() < self.epsilon:
+            return self.low_level_action_space.sample()
+        return np.argmax(self.low_level_q[(state, subgoal)])
+    
+    def update_high_level(self, state, subgoal, reward, next_state):
+        """Update high-level Q-values using subgoal reward."""
+        best_next = np.max(self.high_level_q[next_state])
+        td_target = reward + self.gamma * best_next
+        td_error = td_target - self.high_level_q[state][subgoal]
+        self.high_level_q[state][subgoal] += self.alpha_high * td_error
+    
+    def update_low_level(self, state, subgoal, action, reward, next_state):
+        """Update low-level Q-values using primitive reward."""
+        best_next = np.max(self.low_level_q[(next_state, subgoal)])
+        td_target = reward + self.gamma * best_next
+        td_error = td_target - self.low_level_q[(state, subgoal)][action]
+        self.low_level_q[(state, subgoal)][action] += self.alpha_low * td_error
+    
+    def train(self, episodes=1000):
+        """Train the hierarchical agent."""
+        for episode in range(episodes):
+            state = self.env.reset()
+            done = False
+            total_reward = 0
+            
+            while not done:
+                # High-level decision: select subgoal
+                subgoal = self.select_high_level_action(tuple(state[:3]))  # Use position as state
+                subgoal_reached = False
+                subgoal_reward = 0
+                
+                # Low-level execution: achieve subgoal
+                while not subgoal_reached and not done:
+                    action = self.select_low_level_action(tuple(state[:3]), subgoal)
+                    next_state, reward, done, _ = self.env.step(action)
+                    
+                    # Update low-level policy
+                    self.update_low_level(
+                        tuple(state[:3]), subgoal, action, reward, tuple(next_state[:3])
+                    )
+                    
+                    # Check if subgoal reached (simplified)
+                    subgoal_reached = np.linalg.norm(next_state[:3] - self.high_level_action_space.sample()) < 0.05
+                    subgoal_reward += reward
+                    total_reward += reward
+                    state = next_state
+                
+                # Update high-level policy after subgoal completion
+                self.update_high_level(
+                    tuple(state[:3]), subgoal, subgoal_reward, tuple(next_state[:3])
+                )
+            
+            if episode % 100 == 0:
+                print(f"Episode {episode}, Total Reward: {total_reward}")
+
+# Example usage
+if __name__ == "__main__":
+    agent = HierarchicalRLAgent()
+    agent.train()
