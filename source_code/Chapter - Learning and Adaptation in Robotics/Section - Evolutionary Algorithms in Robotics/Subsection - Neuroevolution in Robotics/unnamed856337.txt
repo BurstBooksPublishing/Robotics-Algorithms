@@ -1,0 +1,61 @@
+import numpy as np
+import gym
+from neat import Config, DefaultReproduction, DefaultStagnation, DefaultSpeciesSet
+from neat.nn import FeedForwardNetwork
+
+class NeuroevolutionRobot:
+    def __init__(self, env_name="BipedalWalker-v3", generations=100):
+        self.env = gym.make(env_name)
+        self.generations = generations
+        self.config = Config(
+            FeedForwardNetwork,
+            DefaultReproduction,
+            DefaultSpeciesSet,
+            DefaultStagnation,
+            "neat_config.txt"  # NEAT hyperparameters (mutation, crossover, etc.)
+        )
+        
+    def evaluate_genome(self, genome, config):
+        """Evaluate a single genome's fitness by simulating in the environment."""
+        net = FeedForwardNetwork.create(genome, config)
+        obs = self.env.reset()
+        fitness = 0.0
+        
+        for _ in range(1000):  # Max simulation steps
+            action = net.activate(obs)  # Neural network outputs actions
+            obs, reward, done, _ = self.env.step(action)
+            fitness += reward
+            if done:
+                break
+        return fitness
+    
+    def run_neuroevolution(self):
+        """Run NEAT-based neuroevolution to train robotic control policies."""
+        population = self.config.population_config.default_population
+        best_fitness = -np.inf
+        
+        for generation in range(self.generations):
+            fitnesses = []
+            for genome_id, genome in population.items():
+                fitness = self.evaluate_genome(genome, self.config)
+                genome.fitness = fitness
+                fitnesses.append(fitness)
+                
+            current_best = max(fitnesses)
+            if current_best > best_fitness:
+                best_fitness = current_best
+                print(f"Gen {generation}: Best fitness = {best_fitness:.2f}")
+                
+            population = self.config.reproduction.reproduce(
+                self.config, 
+                population, 
+                self.config.population_size
+            )
+        
+        self.env.close()
+        return best_fitness
+
+# Example usage
+if __name__ == "__main__":
+    neuro_robot = NeuroevolutionRobot()
+    neuro_robot.run_neuroevolution()
