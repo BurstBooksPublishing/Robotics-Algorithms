@@ -1,0 +1,56 @@
+import numpy as np
+from deap import algorithms, base, creator, tools
+
+# Define fitness and individual for evolutionary policy search
+creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+creator.create("Individual", np.ndarray, fitness=creator.FitnessMax)
+
+def evaluate_policy(individual, robot_env):
+    """Evaluate a policy (individual) in the robot environment."""
+    total_reward = 0.0
+    state = robot_env.reset()
+    for _ in range(robot_env.max_steps):
+        action = np.dot(individual, state)  # Simple linear policy
+        state, reward, done, _ = robot_env.step(action)
+        total_reward += reward
+        if done:
+            break
+    return total_reward,
+
+def setup_evolutionary_algorithm(pop_size, ind_size, cxpb, mutpb):
+    """Configure DEAP evolutionary algorithm components."""
+    toolbox = base.Toolbox()
+    
+    # Initialize population with Gaussian-distributed weights
+    toolbox.register("attr_float", np.random.normal, 0, 1)
+    toolbox.register("individual", tools.initRepeat, creator.Individual,
+                     toolbox.attr_float, n=ind_size)
+    toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+    
+    # Genetic operators
+    toolbox.register("mate", tools.cxBlend, alpha=0.5)
+    toolbox.register("mutate", tools.mutGaussian, mu=0, sigma=0.2, indpb=0.1)
+    toolbox.register("select", tools.selTournament, tournsize=3)
+    
+    return toolbox
+
+def evolve_robot_policy(robot_env, generations=100, pop_size=50):
+    """Main evolutionary policy search routine."""
+    ind_size = robot_env.observation_space.shape[0] * robot_env.action_space.shape[0]
+    toolbox = setup_evolutionary_algorithm(pop_size, ind_size, cxpb=0.5, mutpb=0.2)
+    
+    # Attach environment-specific evaluation function
+    toolbox.register("evaluate", evaluate_policy, robot_env=robot_env)
+    
+    # Create initial population
+    pop = toolbox.population(n=pop_size)
+    hof = tools.HallOfFame(1)
+    stats = tools.Statistics(lambda ind: ind.fitness.values)
+    stats.register("avg", np.mean)
+    stats.register("max", np.max)
+    
+    # Run evolution
+    algorithms.eaSimple(pop, toolbox, cxpb=0.5, mutpb=0.2, ngen=generations,
+                        stats=stats, halloffame=hof, verbose=True)
+    
+    return hof[0]  # Return best evolved policy
