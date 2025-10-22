@@ -1,0 +1,143 @@
+import java.util.*;
+
+/**
+ * Auction-based task allocation for multi-robot systems.
+ * Implements a simplified version of the Consensus-Based Auction Algorithm (CBAA).
+ */
+public class AuctionTaskAllocation {
+    private List robots;
+    private List tasks;
+    private Map assignments; // taskId -> robotId
+
+    public AuctionTaskAllocation(List robots, List tasks) {
+        this.robots = robots;
+        this.tasks = tasks;
+        this.assignments = new HashMap<>();
+    }
+
+    /**
+     * Runs the auction process for task allocation
+     */
+    public void runAuction() {
+        // Phase 1: Bidding
+        for (Robot robot : robots) {
+            for (Task task : tasks) {
+                double bid = calculateBid(robot, task);
+                robot.submitBid(task.getId(), bid);
+            }
+        }
+
+        // Phase 2: Winner Determination
+        for (Task task : tasks) {
+            int winningRobotId = -1;
+            double highestBid = Double.MIN_VALUE;
+
+            for (Robot robot : robots) {
+                double currentBid = robot.getBid(task.getId());
+                if (currentBid > highestBid) {
+                    highestBid = currentBid;
+                    winningRobotId = robot.getId();
+                }
+            }
+
+            if (winningRobotId != -1) {
+                assignments.put(task.getId(), winningRobotId);
+            }
+        }
+    }
+
+    /**
+     * Calculates bid based on robot capability and task requirements
+     */
+    private double calculateBid(Robot robot, Task task) {
+        // Simple bid calculation: inverse of distance + capability match
+        double distance = calculateDistance(robot.getPosition(), task.getLocation());
+        double capabilityMatch = calculateCapabilityMatch(robot.getCapabilities(), task.getRequirements());
+        return (1.0 / (1 + distance)) * capabilityMatch;
+    }
+
+    // Helper methods omitted for brevity...
+}
+
+/**
+ * Market-based task allocation using a contract net protocol
+ */
+public class MarketTaskAllocation {
+    private List robots;
+    private List tasks;
+
+    public MarketTaskAllocation(List robots, List tasks) {
+        this.robots = robots;
+        this.tasks = tasks;
+    }
+
+    /**
+     * Executes market-based allocation through contract net protocol
+     */
+    public void executeContractNet() {
+        for (Task task : tasks) {
+            // Announce task to all robots
+            announceTask(task);
+
+            // Collect bids from robots
+            List bids = collectBids(task);
+
+            // Award task to best bidder
+            if (!bids.isEmpty()) {
+                Bid bestBid = selectBestBid(bids);
+                awardTask(task, bestBid.getRobotId());
+            }
+        }
+    }
+
+    private void announceTask(Task task) {
+        // Broadcast task announcement to all robots
+        for (Robot robot : robots) {
+            robot.receiveTaskAnnouncement(task);
+        }
+    }
+
+    private List collectBids(Task task) {
+        List bids = new ArrayList<>();
+        for (Robot robot : robots) {
+            Optional bid = robot.submitBid(task);
+            bid.ifPresent(bids::add);
+        }
+        return bids;
+    }
+
+    // Other helper methods omitted for brevity...
+}
+
+// Supporting classes
+class Robot {
+    private int id;
+    private Position position;
+    private Map capabilities;
+    private Map bids; // taskId -> bid amount
+
+    // Methods omitted for brevity...
+}
+
+class Task {
+    private int id;
+    private Position location;
+    private Map requirements;
+
+    // Methods omitted for brevity...
+}
+
+class Bid {
+    private int robotId;
+    private int taskId;
+    private double amount;
+
+    // Methods omitted for brevity...
+}
+
+class Position {
+    private double x;
+    private double y;
+
+    // Methods omitted for brevity...
+}
