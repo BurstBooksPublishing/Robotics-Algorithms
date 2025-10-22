@@ -1,0 +1,68 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+class ParticleFilter:
+    def __init__(self, num_particles, motion_noise, sensor_noise):
+        self.num_particles = num_particles
+        self.motion_noise = motion_noise
+        self.sensor_noise = sensor_noise
+        self.particles = np.random.uniform(0, 100, (num_particles, 2))  # Random initial positions
+        self.weights = np.ones(num_particles) / num_particles  # Uniform weights
+
+    def predict(self, u):
+        """Move particles based on control input u (dx, dy) with added noise."""
+        noise = np.random.normal(0, self.motion_noise, (self.num_particles, 2))
+        self.particles += u + noise
+
+    def update(self, z, landmarks):
+        """Update particle weights based on sensor measurements z."""
+        for i, particle in enumerate(self.particles):
+            # Calculate expected measurement for each landmark
+            expected_z = np.linalg.norm(landmarks - particle, axis=1)
+            # Compute likelihood using Gaussian noise model
+            likelihood = np.prod(np.exp(-0.5 * ((z - expected_z) ** 2) / (self.sensor_noise ** 2)))
+            self.weights[i] = likelihood
+        # Normalize weights
+        self.weights += 1e-300  # Avoid division by zero
+        self.weights /= np.sum(self.weights)
+
+    def resample(self):
+        """Resample particles based on weights using systematic resampling."""
+        indices = np.zeros(self.num_particles, dtype=int)
+        cumulative_sum = np.cumsum(self.weights)
+        step = 1.0 / self.num_particles
+        u = np.random.uniform(0, step)
+        j = 0
+        for i in range(self.num_particles):
+            while u > cumulative_sum[j]:
+                j += 1
+            indices[i] = j
+            u += step
+        self.particles = self.particles[indices]
+        self.weights = np.ones(self.num_particles) / self.num_particles
+
+    def estimate(self):
+        """Return mean position of particles."""
+        return np.average(self.particles, weights=self.weights, axis=0)
+
+# Example usage
+if __name__ == "__main__":
+    # Initialize with 1000 particles, motion noise=0.5, sensor noise=0.3
+    pf = ParticleFilter(1000, 0.5, 0.3)
+    landmarks = np.array([[20, 20], [80, 80], [20, 80], [80, 20]])  # Known landmarks
+    
+    # Simulate robot movement and measurements
+    true_position = np.array([10, 10])
+    for _ in range(10):
+        # Robot moves diagonally
+        true_position += [5, 5]
+        # Simulate sensor measurements (distance to landmarks)
+        z = np.linalg.norm(landmarks - true_position, axis=1) + np.random.normal(0, 0.3, len(landmarks))
+        
+        # Particle filter steps
+        pf.predict([5, 5])  # Predict motion
+        pf.update(z, landmarks)  # Update weights
+        pf.resample()  # Resample particles
+        
+        # Print estimate
+        print(f"True position: {true_position}, Estimated: {pf.estimate()}")
