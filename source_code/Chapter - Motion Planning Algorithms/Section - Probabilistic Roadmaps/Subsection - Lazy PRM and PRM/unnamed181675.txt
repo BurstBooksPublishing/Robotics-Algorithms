@@ -1,0 +1,120 @@
+import java.util.*;
+
+/**
+ * Lazy PRM and PRM* implementation for motion planning in robotics.
+ * Assumes a 2D workspace with obstacles represented as polygons.
+ */
+public class LazyPRMAndPRMStar {
+    private static class Node {
+        double x, y;
+        List neighbors;
+        boolean isCollisionFree;
+
+        Node(double x, double y) {
+            this.x = x;
+            this.y = y;
+            this.neighbors = new ArrayList<>();
+            this.isCollisionFree = true;
+        }
+    }
+
+    private List nodes;
+    private List obstacles;
+    private Random random;
+
+    public LazyPRMAndPRMStar(List obstacles) {
+        this.nodes = new ArrayList<>();
+        this.obstacles = obstacles;
+        this.random = new Random();
+    }
+
+    /**
+     * Builds the PRM* roadmap with n nodes and connection radius r.
+     */
+    public void buildPRMStar(int n, double r) {
+        // Sample n collision-free nodes
+        while (nodes.size() < n) {
+            Node node = sampleRandomNode();
+            if (isCollisionFree(node)) {
+                nodes.add(node);
+            }
+        }
+
+        // Connect nodes within radius r (PRM* variant)
+        for (Node node : nodes) {
+            for (Node other : nodes) {
+                if (node != other && distance(node, other) <= r) {
+                    if (isCollisionFreeEdge(node, other)) {
+                        node.neighbors.add(other);
+                        other.neighbors.add(node);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Lazy PRM variant - checks collisions only when needed
+     */
+    public List lazyPRMQuery(Node start, Node goal, int k) {
+        // Connect start and goal to k nearest neighbors
+        connectToNearestNeighbors(start, k);
+        connectToNearestNeighbors(goal, k);
+
+        // Use A* to find path (assuming all edges are collision-free)
+        List path = aStar(start, goal);
+
+        // Verify path and repair if needed
+        return verifyAndRepairPath(path);
+    }
+
+    private Node sampleRandomNode() {
+        return new Node(random.nextDouble() * 100, random.nextDouble() * 100);
+    }
+
+    private boolean isCollisionFree(Node node) {
+        for (Polygon obstacle : obstacles) {
+            if (obstacle.contains(node.x, node.y)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isCollisionFreeEdge(Node a, Node b) {
+        // Simplified line segment collision check
+        for (Polygon obstacle : obstacles) {
+            if (obstacle.intersectsLine(a.x, a.y, b.x, b.y)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private double distance(Node a, Node b) {
+        return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
+    }
+
+    private void connectToNearestNeighbors(Node node, int k) {
+        // Find k nearest neighbors (omitted for brevity)
+        // Similar to PRM* connection but only for this node
+    }
+
+    private List aStar(Node start, Node goal) {
+        // Standard A* implementation (omitted for brevity)
+        return new ArrayList<>();
+    }
+
+    private List verifyAndRepairPath(List path) {
+        // Check each edge and repair if collision found
+        List verifiedPath = new ArrayList<>();
+        // Implementation omitted for brevity
+        return verifiedPath;
+    }
+}
+
+// Helper class (simplified)
+class Polygon {
+    boolean contains(double x, double y) { return false; }
+    boolean intersectsLine(double x1, double y1, double x2, double y2) { return false; }
+}
