@@ -1,0 +1,61 @@
+import numpy as np
+
+class Particle:
+    def __init__(self, dim, bounds):
+        self.position = np.random.uniform(bounds[0], bounds[1], dim)  # Random initial position
+        self.velocity = np.random.uniform(-1, 1, dim)                 # Random initial velocity
+        self.best_position = np.copy(self.position)                   # Personal best position
+        self.best_fitness = float('inf')                              # Personal best fitness
+
+class PSO:
+    def __init__(self, objective_func, dim, bounds, num_particles, max_iter, w=0.7, c1=1.5, c2=1.5):
+        self.objective_func = objective_func  # Fitness function to optimize
+        self.dim = dim                        # Problem dimensionality
+        self.bounds = bounds                  # Search space bounds [min, max]
+        self.num_particles = num_particles    # Swarm size
+        self.max_iter = max_iter              # Maximum iterations
+        self.w = w                            # Inertia weight
+        self.c1 = c1                          # Cognitive coefficient
+        self.c2 = c2                          # Social coefficient
+        self.global_best_position = None      # Global best position
+        self.global_best_fitness = float('inf')
+        self.swarm = [Particle(dim, bounds) for _ in range(num_particles)]
+
+    def optimize(self):
+        for _ in range(self.max_iter):
+            for particle in self.swarm:
+                # Evaluate current fitness
+                fitness = self.objective_func(particle.position)
+                
+                # Update personal best
+                if fitness < particle.best_fitness:
+                    particle.best_fitness = fitness
+                    particle.best_position = particle.position.copy()
+                
+                # Update global best
+                if fitness < self.global_best_fitness:
+                    self.global_best_fitness = fitness
+                    self.global_best_position = particle.position.copy()
+            
+            # Update velocities and positions
+            for particle in self.swarm:
+                r1, r2 = np.random.random(), np.random.random()
+                # Velocity update (inertia + cognitive + social)
+                particle.velocity = (self.w * particle.velocity +
+                                    self.c1 * r1 * (particle.best_position - particle.position) +
+                                    self.c2 * r2 * (self.global_best_position - particle.position))
+                # Position update with boundary clamping
+                particle.position = np.clip(particle.position + particle.velocity, 
+                                          self.bounds[0], self.bounds[1])
+        
+        return self.global_best_position, self.global_best_fitness
+
+# Example usage for robotic swarm navigation (minimizing distance to target)
+if __name__ == "__main__":
+    def objective_func(x):
+        target = np.array([5.0, 5.0])  # Target position in 2D space
+        return np.linalg.norm(x - target)  # Euclidean distance to target
+    
+    pso = PSO(objective_func, dim=2, bounds=[0, 10], num_particles=30, max_iter=100)
+    best_pos, best_fitness = pso.optimize()
+    print(f"Optimal position: {best_pos}, Fitness: {best_fitness}")
