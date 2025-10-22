@@ -1,0 +1,75 @@
+import numpy as np
+import gym
+from collections import defaultdict
+
+# Model-Free RL: Q-Learning (off-policy)
+def q_learning(env, episodes=1000, alpha=0.1, gamma=0.99, epsilon=0.1):
+    Q = defaultdict(lambda: np.zeros(env.action_space.n))
+    
+    for _ in range(episodes):
+        state = env.reset()
+        done = False
+        
+        while not done:
+            # Epsilon-greedy action selection
+            if np.random.rand() < epsilon:
+                action = env.action_space.sample()
+            else:
+                action = np.argmax(Q[state])
+            
+            next_state, reward, done, _ = env.step(action)
+            
+            # Q-learning update
+            best_next_action = np.argmax(Q[next_state])
+            Q[state][action] += alpha * (reward + gamma * Q[next_state][best_next_action] - Q[state][action])
+            state = next_state
+    
+    return Q
+
+# Model-Based RL: Dyna-Q (integrates model learning)
+def dyna_q(env, episodes=1000, alpha=0.1, gamma=0.99, epsilon=0.1, planning_steps=5):
+    Q = defaultdict(lambda: np.zeros(env.action_space.n))
+    model = {}  # Stores (state, action) -> (reward, next_state)
+    
+    for _ in range(episodes):
+        state = env.reset()
+        done = False
+        
+        while not done:
+            # Epsilon-greedy action selection
+            if np.random.rand() < epsilon:
+                action = env.action_space.sample()
+            else:
+                action = np.argmax(Q[state])
+            
+            next_state, reward, done, _ = env.step(action)
+            
+            # Q-learning update
+            best_next_action = np.argmax(Q[next_state])
+            Q[state][action] += alpha * (reward + gamma * Q[next_state][best_next_action] - Q[state][action])
+            
+            # Model learning
+            model[(state, action)] = (reward, next_state)
+            state = next_state
+            
+            # Planning (model-based updates)
+            for _ in range(planning_steps):
+                # Sample random (s, a) from model
+                s, a = random.choice(list(model.keys()))
+                r, s_prime = model[(s, a)]
+                # Update Q using simulated experience
+                best_a_prime = np.argmax(Q[s_prime])
+                Q[s][a] += alpha * (r + gamma * Q[s_prime][best_a_prime] - Q[s][a])
+    
+    return Q
+
+# Example usage with a robotics control environment
+if __name__ == "__main__":
+    env = gym.make('Reacher-v4')  # Example robotics control task
+    
+    # Compare approaches
+    print("Training Model-Free Q-Learning...")
+    q_learning_policy = q_learning(env)
+    
+    print("\nTraining Model-Based Dyna-Q...")
+    dyna_q_policy = dyna_q(env, planning_steps=10)
