@@ -1,0 +1,68 @@
+// Admittance and Impedance Control for Haptic Feedback in Robotics
+public class HapticController {
+    private double[] desiredForce;  // Desired force vector [Fx, Fy, Fz]
+    private double[] actualPosition; // Actual robot end-effector position [x, y, z]
+    private double[] desiredPosition; // Desired position from human input [x, y, z]
+    private double[][] admittanceMatrix; // Admittance matrix (3x3)
+    private double[][] impedanceMatrix; // Impedance matrix (3x3)
+
+    // Constructor initializes matrices and vectors
+    public HapticController() {
+        desiredForce = new double[3];
+        actualPosition = new double[3];
+        desiredPosition = new double[3];
+        
+        // Initialize admittance matrix (inverse of impedance)
+        admittanceMatrix = new double[][] {
+            {0.1, 0.0, 0.0},
+            {0.0, 0.1, 0.0},
+            {0.0, 0.0, 0.1}
+        };
+        
+        // Initialize impedance matrix (stiffness)
+        impedanceMatrix = new double[][] {
+            {10.0, 0.0, 0.0},
+            {0.0, 10.0, 0.0},
+            {0.0, 0.0, 10.0}
+        };
+    }
+
+    // Admittance control: computes position adjustment from force input
+    public double[] admittanceControl(double[] externalForce) {
+        double[] positionAdjustment = new double[3];
+        
+        // Δx = A * F (A: admittance matrix, F: external force)
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                positionAdjustment[i] += admittanceMatrix[i][j] * externalForce[j];
+            }
+        }
+        return positionAdjustment;
+    }
+
+    // Impedance control: computes force from position error
+    public double[] impedanceControl(double[] positionError) {
+        double[] outputForce = new double[3];
+        
+        // F = K * Δx (K: stiffness matrix, Δx: position error)
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                outputForce[i] += impedanceMatrix[i][j] * positionError[j];
+            }
+        }
+        return outputForce;
+    }
+
+    // Combined control for teleoperation (admittance on human side, impedance on robot side)
+    public double[] hybridControl(double[] humanForce, double[] robotPositionError) {
+        double[] adjustedPosition = admittanceControl(humanForce);
+        double[] feedbackForce = impedanceControl(robotPositionError);
+        
+        // Combine results for bilateral teleoperation
+        double[] combinedOutput = new double[3];
+        for (int i = 0; i < 3; i++) {
+            combinedOutput[i] = adjustedPosition[i] + 0.5 * feedbackForce[i]; // Weighted combination
+        }
+        return combinedOutput;
+    }
+}
