@@ -1,0 +1,68 @@
+import java.util.*;
+
+/**
+ * Probabilistic Roadmap (PRM) for Sampling-Based Motion Planning in Robotics.
+ * Simulates the construction of a roadmap for path planning in a 2D environment.
+ */
+public class ProbabilisticRoadmap {
+    private static final int NUM_SAMPLES = 1000; // Number of random samples
+    private static final double CONNECTION_RADIUS = 50.0; // Max connection distance
+
+    static class Point {
+        double x, y;
+        Point(double x, double y) { this.x = x; this.y = y; }
+    }
+
+    static class Edge {
+        Point p1, p2;
+        Edge(Point p1, Point p2) { this.p1 = p1; this.p2 = p2; }
+    }
+
+    // Checks if a point is in collision with obstacles (simplified)
+    private static boolean isCollisionFree(Point p, List obstacles) {
+        for (Point obs : obstacles) {
+            if (Math.hypot(p.x - obs.x, p.y - obs.y) < 10.0) return false;
+        }
+        return true;
+    }
+
+    // Generates random samples in free space
+    private static List generateSamples(int width, int height, List obstacles) {
+        List samples = new ArrayList<>();
+        Random rand = new Random();
+        while (samples.size() < NUM_SAMPLES) {
+            Point p = new Point(rand.nextDouble() * width, rand.nextDouble() * height);
+            if (isCollisionFree(p, obstacles)) samples.add(p);
+        }
+        return samples;
+    }
+
+    // Connects nearby samples to build the roadmap
+    private static List buildRoadmap(List samples, List obstacles) {
+        List roadmap = new ArrayList<>();
+        for (int i = 0; i < samples.size(); i++) {
+            for (int j = i + 1; j < samples.size(); j++) {
+                Point p1 = samples.get(i);
+                Point p2 = samples.get(j);
+                if (Math.hypot(p1.x - p2.x, p1.y - p2.y) < CONNECTION_RADIUS 
+                    && isCollisionFree(new Point((p1.x + p2.x)/2, (p1.y + p2.y)/2), obstacles)) {
+                    roadmap.add(new Edge(p1, p2));
+                }
+            }
+        }
+        return roadmap;
+    }
+
+    public static void main(String[] args) {
+        // Example usage: 500x500 environment with 3 circular obstacles
+        List obstacles = Arrays.asList(
+            new Point(100, 100), new Point(300, 300), new Point(200, 400)
+        );
+        
+        List samples = generateSamples(500, 500, obstacles);
+        List roadmap = buildRoadmap(samples, obstacles);
+        
+        System.out.println("PRM constructed with " + samples.size() + " nodes and " 
+            + roadmap.size() + " edges.");
+    }
+}
