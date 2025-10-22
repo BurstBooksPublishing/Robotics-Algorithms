@@ -1,0 +1,68 @@
+import org.opencv.core.Core;
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfByte;
+import org.opencv.core.MatOfPoint;
+import org.opencv.core.Scalar;
+import org.opencv.core.Size;
+import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.imgproc.Imgproc;
+import org.opencv.videoio.VideoCapture;
+
+public class RobotVisionProcessor {
+    public static void main(String[] args) {
+        // Load OpenCV native library
+        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+
+        // Initialize video capture from robot's camera
+        VideoCapture camera = new VideoCapture(0);
+        if (!camera.isOpened()) {
+            System.err.println("Error: Camera not accessible");
+            return;
+        }
+
+        Mat frame = new Mat();
+        Mat grayFrame = new Mat();
+        Mat blurredFrame = new Mat();
+        Mat edges = new Mat();
+
+        // Main processing loop for robot vision
+        while (true) {
+            // Capture frame from robot's camera
+            camera.read(frame);
+            if (frame.empty()) break;
+
+            // Convert to grayscale for edge detection
+            Imgproc.cvtColor(frame, grayFrame, Imgproc.COLOR_BGR2GRAY);
+
+            // Apply Gaussian blur to reduce noise
+            Imgproc.GaussianBlur(grayFrame, blurredFrame, new Size(5, 5), 0);
+
+            // Canny edge detection for obstacle identification
+            Imgproc.Canny(blurredFrame, edges, 50, 150);
+
+            // Find contours of detected edges
+            Mat hierarchy = new Mat();
+            List contours = new ArrayList<>();
+            Imgproc.findContours(edges, contours, hierarchy, 
+                Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+
+            // Draw contours for visualization (robot navigation)
+            Mat contourFrame = frame.clone();
+            Imgproc.drawContours(contourFrame, contours, -1, 
+                new Scalar(0, 255, 0), 2);
+
+            // Display processed frames (for debugging)
+            Imgcodecs.imwrite("robot_vision_output.jpg", contourFrame);
+
+            // Add your robotics algorithm integration here
+            // Example: Path planning based on detected obstacles
+        }
+
+        // Release resources
+        camera.release();
+        frame.release();
+        grayFrame.release();
+        blurredFrame.release();
+        edges.release();
+    }
+}
