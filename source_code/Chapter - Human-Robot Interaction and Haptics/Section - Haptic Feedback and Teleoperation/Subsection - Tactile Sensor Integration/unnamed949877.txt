@@ -1,0 +1,52 @@
+// TactileSensorIntegration.java
+// Demonstrates tactile sensor data processing for haptic feedback in robotics.
+// Part of Chapter 8: Human-Robot Interaction and Haptics
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class TactileSensorIntegration {
+    private List sensorReadings;  // Stores raw pressure values from tactile array
+    private double threshold;            // Minimum pressure to trigger haptic feedback
+
+    public TactileSensorIntegration(double feedbackThreshold) {
+        this.sensorReadings = new ArrayList<>();
+        this.threshold = feedbackThreshold;
+    }
+
+    // Processes incoming sensor data and triggers feedback if threshold exceeded
+    public void processSensorData(double[] newReadings) {
+        for (double reading : newReadings) {
+            sensorReadings.add(reading);
+            if (reading > threshold) {
+                triggerHapticFeedback(reading);
+            }
+        }
+    }
+
+    // Generates proportional haptic feedback based on pressure intensity
+    private void triggerHapticFeedback(double intensity) {
+        double feedbackStrength = mapToHapticRange(intensity);
+        HapticController.vibrate(feedbackStrength);  // Interface with haptic device
+    }
+
+    // Maps raw sensor value to haptic output range (0.0-1.0)
+    private double mapToHapticRange(double value) {
+        final double MAX_SENSOR_VALUE = 1000.0;  // Manufacturer-specified max
+        return Math.min(value / MAX_SENSOR_VALUE, 1.0);
+    }
+
+    // Nested class representing haptic controller interface
+    private static class HapticController {
+        static void vibrate(double intensity) {
+            // Implementation would interface with actual haptic hardware
+            System.out.printf("Haptic feedback: %.2f intensity%n", intensity);
+        }
+    }
+
+    public static void main(String[] args) {
+        TactileSensorIntegration integrator = new TactileSensorIntegration(250.0);
+        double[] testData = {150.0, 300.0, 50.0, 600.0};  // Simulated sensor readings
+        integrator.processSensorData(testData);
+    }
+}
