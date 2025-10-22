@@ -1,0 +1,71 @@
+import gymnasium as gym
+import mujoco
+import numpy as np
+from stable_baselines3 import PPO
+from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import VecNormalize
+
+# Initialize Mujoco environment for reinforcement learning
+def setup_mujoco_env(env_name="Ant-v4", n_envs=4):
+    """
+    Create a vectorized Mujoco environment with normalization.
+    
+    Args:
+        env_name (str): Mujoco environment ID (e.g., "Ant-v4", "Humanoid-v4")
+        n_envs (int): Number of parallel environments for faster training
+    """
+    # Create vectorized environments for parallel training
+    env = make_vec_env(env_name, n_envs=n_envs)
+    
+    # Normalize observations and rewards for stable training
+    env = VecNormalize(env, norm_obs=True, norm_reward=True)
+    return env
+
+# Custom callback for logging and early stopping
+class MujocoCallback:
+    def __init__(self, check_freq=10000):
+        self.check_freq = check_freq
+        self.best_mean_reward = -np.inf
+
+    def __call__(self, locals_, globals_):
+        if locals_["self"].num_timesteps % self.check_freq == 0:
+            # Evaluate policy performance
+            mean_reward = np.mean([locals_["env"].get_original_reward() 
+                                 for _ in range(10)])
+            
+            # Save best model
+            if mean_reward > self.best_mean_reward:
+                locals_["self"].save("best_model")
+                self.best_mean_reward = mean_reward
+        return True
+
+# Main training function
+def train_mujoco_agent():
+    # Environment setup
+    env = setup_mujoco_env("Humanoid-v4", n_envs=8)
+    
+    # Proximal Policy Optimization (PPO) agent
+    model = PPO(
+        "MlpPolicy",
+        env,
+        verbose=1,
+        n_steps=2048,
+        batch_size=64,
+        learning_rate=3e-4,
+        ent_coef=0.0,
+        clip_range=0.2,
+        n_epochs=10,
+        gamma=0.99,
+        gae_lambda=0.95
+    )
+    
+    # Train with custom callback
+    callback = MujocoCallback()
+    model.learn(total_timesteps=1_000_000, callback=callback)
+    
+    # Save final model and normalization stats
+    model.save("ppo_mujoco_humanoid")
+    env.save("vec_normalize.pkl")
+
+if __name__ == "__main__":
+    train_mujoco_agent()
