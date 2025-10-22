@@ -1,0 +1,99 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.spatial.distance import cdist
+
+class ArtificialPotentialField:
+    """Artificial Potential Field for swarm navigation."""
+    
+    def __init__(self, n_robots=5, goal=np.array([10, 10]), obstacles=None):
+        """
+        Initialize the potential field with robots, goal, and obstacles.
+        
+        Args:
+            n_robots (int): Number of robots in the swarm.
+            goal (np.array): Goal position (2D).
+            obstacles (list): List of obstacle positions (2D).
+        """
+        self.n_robots = n_robots
+        self.robots = np.random.rand(n_robots, 2) * 10  # Random initial positions
+        self.goal = goal
+        self.obstacles = obstacles if obstacles else []
+        
+        # Hyperparameters
+        self.att_gain = 1.0  # Attractive potential gain
+        self.rep_gain = 2.0  # Repulsive potential gain
+        self.rep_radius = 1.5  # Repulsion radius for obstacles
+        self.max_speed = 0.1  # Max robot speed
+        
+    def attractive_force(self, position):
+        """Compute attractive force towards the goal."""
+        return self.att_gain * (self.goal - position)
+    
+    def repulsive_force(self, position):
+        """Compute repulsive force from obstacles."""
+        force = np.zeros(2)
+        for obs in self.obstacles:
+            dist = np.linalg.norm(position - obs)
+            if dist < self.rep_radius:
+                direction = (position - obs) / (dist + 1e-6)  # Avoid division by zero
+                force += self.rep_gain * (1/dist - 1/self.rep_radius) * direction
+        return force
+    
+    def swarm_force(self, robot_pos, other_positions):
+        """Compute inter-robot forces (cohesion and separation)."""
+        force = np.zeros(2)
+        for pos in other_positions:
+            dist = np.linalg.norm(robot_pos - pos)
+            if dist > 0:  # Avoid self-force
+                # Separation force (inverse square law)
+                force += (robot_pos - pos) / (dist**2 + 1e-6)
+        return force * 0.5  # Scale down swarm force
+    
+    def update_positions(self):
+        """Update robot positions based on potential fields."""
+        new_positions = np.zeros_like(self.robots)
+        for i, pos in enumerate(self.robots):
+            # Compute total force
+            other_robots = np.delete(self.robots, i, axis=0)
+            total_force = (self.attractive_force(pos) + 
+                          self.repulsive_force(pos) + 
+                          self.swarm_force(pos, other_robots))
+            
+            # Normalize and apply force
+            force_norm = np.linalg.norm(total_force)
+            if force_norm > 0:
+                total_force = total_force / force_norm * self.max_speed
+            new_positions[i] = pos + total_force
+        
+        self.robots = new_positions
+    
+    def visualize(self, step):
+        """Visualize the swarm and potential fields."""
+        plt.figure(figsize=(8, 6))
+        plt.scatter(self.robots[:, 0], self.robots[:, 1], c='blue', label='Robots')
+        plt.scatter(self.goal[0], self.goal[1], c='green', marker='*', s=200, label='Goal')
+        if self.obstacles:
+            obs = np.array(self.obstacles)
+            plt.scatter(obs[:, 0], obs[:, 1], c='red', marker='x', label='Obstacles')
+        plt.title(f'Swarm Navigation - Step {step}')
+        plt.legend()
+        plt.grid()
+        plt.show()
+
+# Example usage
+if __name__ == "__main__":
+    # Define obstacles
+    obstacles = [
+        np.array([3, 3]),
+        np.array([7, 7]),
+        np.array([5, 8])
+    ]
+    
+    # Initialize APF
+    apf = ArtificialPotentialField(n_robots=10, obstacles=obstacles)
+    
+    # Simulate for 50 steps
+    for step in range(50):
+        apf.update_positions()
+        if step % 10 == 0:  # Visualize every 10 steps
+            apf.visualize(step)
