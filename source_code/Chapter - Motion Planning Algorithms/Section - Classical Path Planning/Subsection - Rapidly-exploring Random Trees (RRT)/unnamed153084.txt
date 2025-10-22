@@ -1,0 +1,128 @@
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+/**
+ * RRT (Rapidly-exploring Random Trees) implementation for robotics motion planning.
+ * Assumes a 2D workspace with obstacles.
+ */
+public class RRT {
+    private static final int MAX_ITERATIONS = 10000;
+    private static final double STEP_SIZE = 5.0;
+    private static final Random random = new Random();
+
+    // Node class representing a point in the tree
+    static class Node {
+        double x, y;
+        Node parent;
+
+        Node(double x, double y, Node parent) {
+            this.x = x;
+            this.y = y;
+            this.parent = parent;
+        }
+    }
+
+    // Obstacle representation (simplified as circles)
+    static class Obstacle {
+        double x, y, radius;
+
+        Obstacle(double x, double y, double radius) {
+            this.x = x;
+            this.y = y;
+            this.radius = radius;
+        }
+
+        boolean collidesWith(double px, double py) {
+            return Math.sqrt(Math.pow(px - x, 2) + Math.pow(py - y, 2)) <= radius;
+        }
+    }
+
+    // RRT algorithm implementation
+    public static List rrt(double startX, double startY, double goalX, double goalY, 
+                                List obstacles, double goalThreshold) {
+        List tree = new ArrayList<>();
+        tree.add(new Node(startX, startY, null)); // Root node
+
+        for (int i = 0; i < MAX_ITERATIONS; i++) {
+            // Sample random point (with bias towards goal)
+            double randX, randY;
+            if (random.nextDouble() < 0.1) { // 10% chance to sample goal directly
+                randX = goalX;
+                randY = goalY;
+            } else {
+                randX = random.nextDouble() * 100; // Workspace width
+                randY = random.nextDouble() * 100; // Workspace height
+            }
+
+            // Find nearest node in tree
+            Node nearest = findNearestNode(tree, randX, randY);
+
+            // Create new node in direction of random point
+            double angle = Math.atan2(randY - nearest.y, randX - nearest.x);
+            double newX = nearest.x + STEP_SIZE * Math.cos(angle);
+            double newY = nearest.y + STEP_SIZE * Math.sin(angle);
+
+            // Check for collisions along the path
+            if (!isCollision(nearest.x, nearest.y, newX, newY, obstacles)) {
+                Node newNode = new Node(newX, newY, nearest);
+                tree.add(newNode);
+
+                // Check if goal is reached
+                if (Math.sqrt(Math.pow(newX - goalX, 2) + Math.pow(newY - goalY, 2)) < goalThreshold) {
+                    return buildPath(newNode);
+                }
+            }
+        }
+        return null; // No path found
+    }
+
+    // Helper method to find nearest node in tree
+    private static Node findNearestNode(List tree, double x, double y) {
+        Node nearest = null;
+        double minDist = Double.MAX_VALUE;
+
+        for (Node node : tree) {
+            double dist = Math.sqrt(Math.pow(node.x - x, 2) + Math.pow(node.y - y, 2));
+            if (dist < minDist) {
+                minDist = dist;
+                nearest = node;
+            }
+        }
+        return nearest;
+    }
+
+    // Collision checking between two points
+    private static boolean isCollision(double x1, double y1, double x2, double y2, 
+                                     List obstacles) {
+        for (Obstacle obs : obstacles) {
+            // Check if either endpoint is inside obstacle
+            if (obs.collidesWith(x1, y1) || obs.collidesWith(x2, y2)) {
+                return true;
+            }
+            // Simplified line-circle intersection check
+            // (Actual implementation would need more robust collision checking)
+            double dx = x2 - x1;
+            double dy = y2 - y1;
+            double a = dx * dx + dy * dy;
+            double b = 2 * (dx * (x1 - obs.x) + dy * (y1 - obs.y));
+            double c = (x1 - obs.x) * (x1 - obs.x) + (y1 - obs.y) * (y1 - obs.y) - obs.radius * obs.radius;
+            double discriminant = b * b - 4 * a * c;
+            if (discriminant >= 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Reconstruct path from goal node to start
+    private static List buildPath(Node goalNode) {
+        List path = new ArrayList<>();
+        Node current = goalNode;
+        while (current != null) {
+            path.add(0, current); // Add to beginning to reverse order
+            current = current.parent;
+        }
+        return path;
+    }
+}
