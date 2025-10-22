@@ -1,0 +1,106 @@
+import org.deeplearning4j.nn.conf.*;
+import org.deeplearning4j.nn.conf.layers.*;
+import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
+import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.learning.config.Adam;
+
+/**
+ * Soft Actor-Critic (SAC) implementation for robotic control.
+ * Adapted for Chapter 7: Learning and Adaptation in Robotics.
+ */
+public class SoftActorCritic {
+
+    private MultiLayerNetwork actorNetwork;
+    private MultiLayerNetwork criticNetwork1;
+    private MultiLayerNetwork criticNetwork2;
+    private MultiLayerNetwork valueNetwork;
+    private MultiLayerNetwork targetValueNetwork;
+
+    private final double gamma = 0.99;  // Discount factor
+    private final double tau = 0.005;   // Soft update coefficient
+    private final double alpha = 0.2;   // Entropy regularization coefficient
+
+    public SoftActorCritic(int stateDim, int actionDim) {
+        // Initialize actor network (policy)
+        actorNetwork = buildActorNetwork(stateDim, actionDim);
+
+        // Initialize twin Q-networks (critics)
+        criticNetwork1 = buildCriticNetwork(stateDim, actionDim);
+        criticNetwork2 = buildCriticNetwork(stateDim, actionDim);
+
+        // Initialize value network and target
+        valueNetwork = buildValueNetwork(stateDim);
+        targetValueNetwork = buildValueNetwork(stateDim);
+        targetValueNetwork.setParams(valueNetwork.params());
+    }
+
+    private MultiLayerNetwork buildActorNetwork(int stateDim, int actionDim) {
+        // Policy network with Gaussian output for continuous actions
+        MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
+            .updater(new Adam(0.001))
+            .list()
+            .layer(0, new DenseLayer.Builder().nIn(stateDim).nOut(256)
+                .activation(Activation.RELU).build())
+            .layer(1, new DenseLayer.Builder().nOut(256)
+                .activation(Activation.RELU).build())
+            .layer(2, new DenseLayer.Builder().nOut(actionDim * 2)  // Mean and log std
+                .activation(Activation.IDENTITY).build())
+            .build();
+        return new MultiLayerNetwork(conf);
+    }
+
+    private MultiLayerNetwork buildCriticNetwork(int stateDim, int actionDim) {
+        // Q-function approximator
+        MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
+            .updater(new Adam(0.001))
+            .list()
+            .layer(0, new DenseLayer.Builder().nIn(stateDim + actionDim).nOut(256)
+                .activation(Activation.RELU).build())
+            .layer(1, new DenseLayer.Builder().nOut(256)
+                .activation(Activation.RELU).build())
+            .layer(2, new OutputLayer.Builder().nOut(1)
+                .activation(Activation.IDENTITY).build())
+            .build();
+        return new MultiLayerNetwork(conf);
+    }
+
+    private MultiLayerNetwork buildValueNetwork(int stateDim) {
+        // State value function approximator
+        MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
+            .updater(new Adam(0.001))
+            .list()
+            .layer(0, new DenseLayer.Builder().nIn(stateDim).nOut(256)
+                .activation(Activation.RELU).build())
+            .layer(1, new DenseLayer.Builder().nOut(256)
+                .activation(Activation.RELU).build())
+            .layer(2, new OutputLayer.Builder().nOut(1)
+                .activation(Activation.IDENTITY).build())
+            .build();
+        return new MultiLayerNetwork(conf);
+    }
+
+    public INDArray selectAction(INDArray state) {
+        // Sample action from policy distribution
+        INDArray policyParams = actorNetwork.output(state);
+        INDArray mean = policyParams.get(NDArrayIndex.interval(0, 0, policyParams.shape()[0]), 
+            NDArrayIndex.interval(0, policyParams.shape()[1]/2));
+        INDArray logStd = policyParams.get(NDArrayIndex.interval(0, 0, policyParams.shape()[0]), 
+            NDArrayIndex.interval(policyParams.shape()[1]/2, policyParams.shape()[1]));
+        
+        INDArray std = Nd4j.exp(logStd);
+        INDArray noise = Nd4j.randn(mean.shape());
+        return mean.add(std.mul(noise));  // Reparameterization trick
+    }
+
+    public void updateNetworks(INDArray states, INDArray actions, INDArray rewards, 
+                             INDArray nextStates, INDArray dones) {
+        // SAC update logic would be implemented here
+        // Including:
+        // 1. Value function update
+        // 2. Q-function updates
+        // 3. Policy update
+        // 4. Target network updates
+    }
+}
