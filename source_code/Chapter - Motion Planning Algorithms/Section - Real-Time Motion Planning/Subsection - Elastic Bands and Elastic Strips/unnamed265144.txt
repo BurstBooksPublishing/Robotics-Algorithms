@@ -1,0 +1,89 @@
+/**
+ * ElasticBand class implements a real-time motion planning algorithm
+ * for robotics, adapting paths dynamically using elastic bands.
+ */
+public class ElasticBand {
+    private List path; // Current path points
+    private List obstacles; // Environment obstacles
+    private double repulsionForce; // Obstacle repulsion coefficient
+
+    public ElasticBand(List initialPath, List obstacles) {
+        this.path = new ArrayList<>(initialPath);
+        this.obstacles = obstacles;
+        this.repulsionForce = 0.5; // Default repulsion strength
+    }
+
+    /**
+     * Updates the elastic band path by applying attraction and repulsion forces.
+     */
+    public void updatePath() {
+        List newPath = new ArrayList<>();
+        for (int i = 0; i < path.size(); i++) {
+            Point current = path.get(i);
+            Point updated = new Point(current.x, current.y);
+
+            // Apply attraction to neighboring points (elasticity)
+            if (i > 0) {
+                Point prev = path.get(i - 1);
+                updated.x += 0.1 * (prev.x - current.x);
+                updated.y += 0.1 * (prev.y - current.y);
+            }
+            if (i < path.size() - 1) {
+                Point next = path.get(i + 1);
+                updated.x += 0.1 * (next.x - current.x);
+                updated.y += 0.1 * (next.y - current.y);
+            }
+
+            // Apply repulsion from obstacles
+            for (Obstacle obs : obstacles) {
+                double distance = current.distanceTo(obs.getPosition());
+                if (distance < obs.getRadius()) {
+                    double dx = current.x - obs.getPosition().x;
+                    double dy = current.y - obs.getPosition().y;
+                    updated.x += repulsionForce * (dx / distance);
+                    updated.y += repulsionForce * (dy / distance);
+                }
+            }
+            newPath.add(updated);
+        }
+        path = newPath;
+    }
+
+    /**
+     * Returns the optimized path after elastic band adjustments.
+     */
+    public List getPath() {
+        return Collections.unmodifiableList(path);
+    }
+}
+
+/**
+ * Helper class representing a 2D point.
+ */
+class Point {
+    public double x, y;
+    public Point(double x, double y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    public double distanceTo(Point other) {
+        return Math.sqrt(Math.pow(x - other.x, 2) + Math.pow(y - other.y, 2));
+    }
+}
+
+/**
+ * Represents an obstacle in the environment.
+ */
+class Obstacle {
+    private Point position;
+    private double radius;
+
+    public Obstacle(Point position, double radius) {
+        this.position = position;
+        this.radius = radius;
+    }
+
+    public Point getPosition() { return position; }
+    public double getRadius() { return radius; }
+}
