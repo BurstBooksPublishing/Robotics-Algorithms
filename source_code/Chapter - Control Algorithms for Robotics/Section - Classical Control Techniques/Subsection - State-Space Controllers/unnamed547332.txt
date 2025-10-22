@@ -1,0 +1,59 @@
+// StateSpaceController.java
+// Implements a state-space controller for robotics applications
+// Reference: Chapter 5 - Control Algorithms for Robotics
+
+public class StateSpaceController {
+    private double[][] A; // State matrix
+    private double[][] B; // Input matrix
+    private double[][] C; // Output matrix
+    private double[][] K; // Feedback gain matrix
+    private double[] x;   // State vector
+
+    // Constructor initializes matrices and state vector
+    public StateSpaceController(double[][] A, double[][] B, double[][] C, double[][] K) {
+        this.A = A;
+        this.B = B;
+        this.C = C;
+        this.K = K;
+        this.x = new double[A.length];
+    }
+
+    // Compute control output given reference and current state
+    public double[] computeControl(double[] r, double[] y) {
+        // State update: x(k+1) = A*x(k) + B*u(k)
+        double[] u = new double[B[0].length];
+        
+        // Calculate control input: u = -K*x + r
+        for (int i = 0; i < K.length; i++) {
+            for (int j = 0; j < K[0].length; j++) {
+                u[i] += -K[i][j] * x[j];
+            }
+            u[i] += r[i];
+        }
+
+        // Update state vector
+        double[] x_next = new double[A.length];
+        for (int i = 0; i < A.length; i++) {
+            for (int j = 0; j < A[0].length; j++) {
+                x_next[i] += A[i][j] * x[j];
+            }
+            for (int j = 0; j < B[0].length; j++) {
+                x_next[i] += B[i][j] * u[j];
+            }
+        }
+        x = x_next;
+
+        return u;
+    }
+
+    // Get current system output: y = C*x
+    public double[] getOutput() {
+        double[] y = new double[C.length];
+        for (int i = 0; i < C.length; i++) {
+            for (int j = 0; j < C[0].length; j++) {
+                y[i] += C[i][j] * x[j];
+            }
+        }
+        return y;
+    }
+}
