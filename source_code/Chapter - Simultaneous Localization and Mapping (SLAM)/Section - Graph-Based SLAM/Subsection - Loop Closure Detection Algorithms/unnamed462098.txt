@@ -1,0 +1,75 @@
+import numpy as np
+import cv2
+from sklearn.neighbors import NearestNeighbors
+
+class LoopClosureDetector:
+    def __init__(self, threshold=0.7, min_matches=10):
+        """
+        Initialize the loop closure detector with a similarity threshold
+        and minimum number of feature matches.
+        """
+        self.threshold = threshold
+        self.min_matches = min_matches
+        self.orb = cv2.ORB_create()
+        self.flann = cv2.FlannBasedMatcher(
+            dict(algorithm=6, table_number=6, key_size=12, multi_probe_level=1), {}
+        )
+        self.descriptors_db = []  # Database of stored descriptors
+        self.poses_db = []        # Corresponding poses in the graph
+
+    def extract_features(self, image):
+        """
+        Extract ORB features and descriptors from an input image.
+        """
+        kp, des = self.orb.detectAndCompute(image, None)
+        return kp, des
+
+    def add_to_database(self, image, pose):
+        """
+        Add a new image and its pose to the loop closure database.
+        """
+        _, des = self.extract_features(image)
+        if des is not None:
+            self.descriptors_db.append(des)
+            self.poses_db.append(pose)
+
+    def detect_loop(self, query_image):
+        """
+        Detect loop closure by comparing query image against database.
+        Returns matching pose if loop is detected, else None.
+        """
+        query_kp, query_des = self.extract_features(query_image)
+        if query_des is None or len(self.descriptors_db) < 2:
+            return None
+
+        # Find 2 nearest neighbors for each descriptor
+        matches = []
+        for db_des in self.descriptors_db:
+            knn_matches = self.flann.knnMatch(query_des, db_des, k=2)
+            # Apply Lowe's ratio test
+            good_matches = [m for m, n in knn_matches if m.distance < self.threshold * n.distance]
+            matches.append(len(good_matches))
+
+        best_match_idx = np.argmax(matches)
+        if matches[best_match_idx] > self.min_matches:
+            return self.poses_db[best_match_idx]
+        return None
+
+    def geometric_verification(self, query_image, candidate_pose):
+        """
+        Verify loop closure using geometric consistency check.
+        """
+        query_kp, query_des = self.extract_features(query_image)
+        candidate_idx = self.poses_db.index(candidate_pose)
+        candidate_des = self.descriptors_db[candidate_idx]
+
+        # Find matches and compute homography
+        matches = self.flann.knnMatch(query_des, candidate_des, k=2)
+        good_matches = [m for m, n in matches if m.distance < self.threshold * n.distance]
+
+        if len(good_matches) > self.min_matches:
+            src_pts = np.float32([query_kp[m.queryIdx].pt for m in good_matches])
+            dst_pts = np.float32([self.keypoints_db[candidate_idx][m.trainIdx].pt for m in good_matches])
+            H, _ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+            return H is not None
+        return False
