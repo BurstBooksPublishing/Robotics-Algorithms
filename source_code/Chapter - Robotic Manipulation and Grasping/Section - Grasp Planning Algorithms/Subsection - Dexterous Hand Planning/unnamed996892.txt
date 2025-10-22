@@ -1,0 +1,69 @@
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+import pybullet as p  # Physics engine for robotics simulation
+
+class DexterousHandPlanner:
+    def __init__(self, hand_urdf_path, object_urdf_path):
+        """Initialize the hand and object models for grasp planning."""
+        self.physics_client = p.connect(p.DIRECT)  # Non-graphical simulation
+        self.hand = p.loadURDF(hand_urdf_path, flags=p.URDF_USE_SELF_COLLISION)
+        self.object = p.loadURDF(object_urdf_path)
+        self.joint_indices = list(range(p.getNumJoints(self.hand)))
+        
+    def compute_grasp_candidates(self, object_pose, num_candidates=10):
+        """Generate potential grasp poses using antipodal sampling."""
+        grasp_candidates = []
+        for _ in range(num_candidates):
+            # Sample random approach direction on object surface
+            approach_dir = np.random.normal(size=3)
+            approach_dir /= np.linalg.norm(approach_dir)
+            
+            # Create orthogonal frame for hand alignment
+            rot_axis = np.cross(approach_dir, np.random.rand(3))
+            rot_angle = np.random.uniform(0, 2*np.pi)
+            rot_matrix = R.from_rotvec(rot_angle * rot_axis).as_matrix()
+            
+            # Compose full transformation matrix
+            hand_pose = np.eye(4)
+            hand_pose[:3, :3] = rot_matrix
+            hand_pose[:3, 3] = object_pose[:3, 3] + 0.1 * approach_dir  # Offset from object
+            
+            grasp_candidates.append(hand_pose)
+        return grasp_candidates
+    
+    def evaluate_grasp(self, hand_pose, max_force=10):
+        """Simulate grasp and evaluate stability using physics simulation."""
+        # Reset simulation and set hand pose
+        p.resetSimulation()
+        p.loadURDF(self.hand, basePosition=hand_pose[:3, 3], 
+                  baseOrientation=R.from_matrix(hand_pose[:3, :3]).as_quat())
+        
+        # Simulate finger closure
+        for joint_idx in self.joint_indices:
+            p.setJointMotorControl2(
+                self.hand, joint_idx, 
+                p.POSITION_CONTROL, 
+                targetPosition=0.8,  # Close fingers to 80%
+                force=max_force
+            )
+        
+        # Run physics simulation for stabilization
+        for _ in range(100):
+            p.stepSimulation()
+        
+        # Check contact points for grasp quality
+        contacts = p.getContactPoints(self.hand, self.object)
+        return len(contacts) > 5  # Empirical threshold for stable grasp
+    
+    def plan_optimal_grasp(self, object_pose, num_iterations=50):
+        """Optimize grasp using sampling-based planning."""
+        best_grasp = None
+        best_score = -np.inf
+        
+        for candidate in self.compute_grasp_candidates(object_pose, num_iterations):
+            score = self.evaluate_grasp(candidate)
+            if score > best_score:
+                best_score = score
+                best_grasp = candidate
+                
+        return best_grasp, best_score
