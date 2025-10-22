@@ -1,0 +1,69 @@
+import numpy as np
+from scipy.linalg import solve_continuous_are
+
+class StateSpaceController:
+    """
+    A state-space controller for robotic systems using Linear Quadratic Regulator (LQR) design.
+    Assumes continuous-time linear system dynamics.
+    """
+    def __init__(self, A, B, Q, R):
+        """
+        Initialize the controller with system matrices and cost matrices.
+        
+        Args:
+            A (np.ndarray): System state matrix (n x n)
+            B (np.ndarray): System input matrix (n x m)
+            Q (np.ndarray): State cost matrix (n x n), positive semi-definite
+            R (np.ndarray): Input cost matrix (m x m), positive definite
+        """
+        self.A = A
+        self.B = B
+        self.Q = Q
+        self.R = R
+        self.K = None  # Controller gain matrix
+        
+    def compute_lqr_gain(self):
+        """Solve the continuous-time algebraic Riccati equation for LQR gain."""
+        # Solve CARE: A'P + PA - PBR^-1B'P + Q = 0
+        P = solve_continuous_are(self.A, self.B, self.Q, self.R)
+        # Compute optimal gain matrix K = R^-1 B' P
+        self.K = np.linalg.inv(self.R) @ self.B.T @ P
+        return self.K
+    
+    def compute_control(self, x, x_desired=np.zeros(0)):
+        """
+        Compute optimal control input u = -K(x - x_desired).
+        
+        Args:
+            x (np.ndarray): Current state vector (n x 1)
+            x_desired (np.ndarray): Desired state vector (n x 1)
+            
+        Returns:
+            np.ndarray: Control input vector (m x 1)
+        """
+        if self.K is None:
+            raise ValueError("Controller gain not computed. Call compute_lqr_gain() first.")
+            
+        if len(x_desired) == 0:
+            x_desired = np.zeros_like(x)
+            
+        return -self.K @ (x - x_desired)
+
+# Example usage for a 2D robotic system
+if __name__ == "__main__":
+    # System matrices (double integrator example)
+    A = np.array([[0, 1], [0, 0]])
+    B = np.array([[0], [1]])
+    
+    # Cost matrices (tune for performance)
+    Q = np.diag([10, 1])  # Prioritize position error over velocity
+    R = np.array([[0.1]])  # Control effort cost
+    
+    # Create and initialize controller
+    controller = StateSpaceController(A, B, Q, R)
+    controller.compute_lqr_gain()
+    
+    # Simulate control response
+    x = np.array([1.0, 0.5])  # Current state [position, velocity]
+    u = controller.compute_control(x)
+    print(f"Optimal control input: {u.flatten()}")
