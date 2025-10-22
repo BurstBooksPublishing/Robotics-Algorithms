@@ -1,0 +1,90 @@
+import org.opencv.core.*;
+import org.opencv.features2d.*;
+import org.opencv.imgproc.Imgproc;
+import org.opencv.calib3d.Calib3d;
+import org.opencv.video.Video;
+
+/**
+ * SLAM-based Visual Odometry implementation for robotics perception.
+ * Tracks camera motion using feature matching and RANSAC-based pose estimation.
+ */
+public class VisualOdometrySLAM {
+    private Mat prevFrame;
+    private MatOfKeyPoint prevKeypoints = new MatOfKeyPoint();
+    private Mat prevDescriptors = new Mat();
+    private Feature2D featureDetector = ORB.create();
+    private DescriptorMatcher matcher = DescriptorMatcher.create(DescriptorMatcher.BRUTEFORCE_HAMMING);
+    private Mat cameraMatrix; // Intrinsic camera parameters
+    private Mat distCoeffs;   // Lens distortion coefficients
+
+    public VisualOdometrySLAM(Mat cameraMatrix, Mat distCoeffs) {
+        this.cameraMatrix = cameraMatrix;
+        this.distCoeffs = distCoeffs;
+    }
+
+    /**
+     * Processes a new frame and estimates camera motion
+     * @param currentFrame Input image (grayscale)
+     * @return 4x4 transformation matrix (world to camera)
+     */
+    public Mat processFrame(Mat currentFrame) {
+        if (prevFrame == null) {
+            currentFrame.copyTo(prevFrame);
+            detectAndCompute(prevFrame, prevKeypoints, prevDescriptors);
+            return Mat.eye(4, 4, CvType.CV_64F);
+        }
+
+        // Detect features in current frame
+        MatOfKeyPoint currKeypoints = new MatOfKeyPoint();
+        Mat currDescriptors = new Mat();
+        detectAndCompute(currentFrame, currKeypoints, currDescriptors);
+
+        // Match features between frames
+        MatOfDMatch matches = new MatOfDMatch();
+        matcher.match(prevDescriptors, currDescriptors, matches);
+
+        // Convert keypoints to usable format
+        List prevKeypointList = prevKeypoints.toList();
+        List currKeypointList = currKeypoints.toList();
+        List matchList = matches.toList();
+
+        // Filter matches using Lowe's ratio test
+        List prevPoints = new ArrayList<>();
+        List currPoints = new ArrayList<>();
+        for (DMatch match : matchList) {
+            prevPoints.add(prevKeypointList.get(match.queryIdx).pt);
+            currPoints.add(currKeypointList.get(match.trainIdx).pt);
+        }
+
+        // Estimate essential matrix using RANSAC
+        Mat essentialMat = Calib3d.findEssentialMat(
+            new MatOfPoint2f(prevPoints.toArray(new Point[0])),
+            new MatOfPoint2f(currPoints.toArray(new Point[0])),
+            cameraMatrix, Calib3d.RANSAC, 0.999, 1.0);
+
+        // Recover relative camera pose
+        Mat R = new Mat(), t = new Mat();
+        Calib3d.recoverPose(essentialMat,
+            new MatOfPoint2f(prevPoints.toArray(new Point[0])),
+            new MatOfPoint2f(currPoints.toArray(new Point[0])),
+            cameraMatrix, R, t);
+
+        // Update previous frame data
+        currentFrame.copyTo(prevFrame);
+        currKeypoints.copyTo(prevKeypoints);
+        currDescriptors.copyTo(prevDescriptors);
+
+        // Construct 4x4 transformation matrix
+        Mat transformation = Mat.eye(4, 4, CvType.CV_64F);
+        R.copyTo(transformation.submat(0, 3, 0, 3));
+        t.copyTo(transformation.submat(0, 3, 3, 4));
+
+        return transformation;
+    }
+
+    private void detectAndCompute(Mat frame, MatOfKeyPoint keypoints, Mat descriptors) {
+        // Detect ORB features and compute descriptors
+        featureDetector.detect(frame, keypoints);
+        featureDetector.compute(frame, keypoints, descriptors);
+    }
+}
