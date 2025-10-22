@@ -1,0 +1,62 @@
+import numpy as np
+import g2o
+
+class PoseGraphOptimization:
+    def __init__(self):
+        # Initialize optimizer with Levenberg-Marquardt algorithm
+        self.optimizer = g2o.SparseOptimizer()
+        solver = g2o.BlockSolverSE3(g2o.LinearSolverCholmodSE3())
+        solver = g2o.OptimizationAlgorithmLevenberg(solver)
+        self.optimizer.set_algorithm(solver)
+
+    def add_vertex(self, id, pose, fixed=False):
+        # Add a vertex (robot pose) to the graph
+        v_se3 = g2o.VertexSE3()
+        v_se3.set_id(id)
+        v_se3.set_estimate(g2o.SE3Quat(pose[0:3, 0:3], pose[0:3, 3]))
+        v_se3.set_fixed(fixed)
+        self.optimizer.add_vertex(v_se3)
+
+    def add_edge(self, vertices, measurement, information, robust_kernel=None):
+        # Add an edge (constraint between poses) to the graph
+        edge = g2o.EdgeSE3()
+        edge.set_vertex(0, self.optimizer.vertex(vertices[0]))
+        edge.set_vertex(1, self.optimizer.vertex(vertices[1]))
+        edge.set_measurement(g2o.SE3Quat(measurement[0:3, 0:3], measurement[0:3, 3]))
+        edge.set_information(information)
+        
+        if robust_kernel is not None:
+            edge.set_robust_kernel(robust_kernel)
+        self.optimizer.add_edge(edge)
+
+    def optimize(self, iterations=10):
+        # Perform pose graph optimization
+        self.optimizer.initialize_optimization()
+        self.optimizer.optimize(iterations)
+
+    def get_pose(self, vertex_id):
+        # Retrieve optimized pose for a vertex
+        return self.optimizer.vertex(vertex_id).estimate().matrix()
+
+# Example usage
+if __name__ == "__main__":
+    pgo = PoseGraphOptimization()
+    
+    # Add vertices (initial poses)
+    pose0 = np.eye(4)
+    pose1 = np.eye(4)
+    pose1[0, 3] = 1.0  # x translation
+    
+    pgo.add_vertex(0, pose0, fixed=True)  # Fix first pose
+    pgo.add_vertex(1, pose1)
+    
+    # Add edge (constraint between poses)
+    measurement = np.eye(4)
+    measurement[0, 3] = 1.1  # Slightly noisy measurement
+    information = np.eye(6)  # Identity information matrix
+    
+    pgo.add_edge([0, 1], measurement, information)
+    
+    # Optimize and print results
+    pgo.optimize()
+    print("Optimized pose:\n", pgo.get_pose(1))
