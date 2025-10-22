@@ -1,0 +1,96 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.integrate import odeint
+
+class SoftRobotArm:
+    """A bio-inspired soft robotic arm model with morphological computation."""
+    
+    def __init__(self, segments=3, stiffness=0.5, damping=0.1):
+        """
+        Initialize soft robotic arm parameters.
+        
+        Args:
+            segments (int): Number of arm segments (default: 3).
+            stiffness (float): Stiffness coefficient (default: 0.5).
+            damping (float): Damping coefficient (default: 0.1).
+        """
+        self.segments = segments
+        self.stiffness = stiffness
+        self.damping = damping
+        self.rest_lengths = np.ones(segments)  # Rest lengths of segments
+        self.positions = np.zeros((segments + 1, 2))  # Segment joint positions
+        
+    def dynamics(self, state, t, control_input):
+        """
+        Dynamics of the soft robotic arm using Lagrangian mechanics.
+        
+        Args:
+            state (np.array): Current state [positions, velocities].
+            t (float): Current time.
+            control_input (np.array): Control forces applied to segments.
+            
+        Returns:
+            np.array: State derivatives.
+        """
+        positions = state[:self.segments + 1]
+        velocities = state[self.segments + 1:]
+        
+        # Compute elastic forces (Hooke's law)
+        lengths = np.linalg.norm(np.diff(positions, axis=0), axis=1)
+        elastic_forces = self.stiffness * (lengths - self.rest_lengths)
+        
+        # Compute damping forces
+        damping_forces = self.damping * velocities[1:]
+        
+        # Compute accelerations (Newton's second law)
+        accelerations = np.zeros_like(positions)
+        for i in range(1, self.segments):
+            # Morphological computation: interaction between segments
+            accelerations[i] = (elastic_forces[i-1] - elastic_forces[i] - 
+                              damping_forces[i-1] + control_input[i-1])
+        
+        return np.concatenate([velocities, accelerations])
+    
+    def simulate(self, duration=10, dt=0.01):
+        """Simulate arm movement with bio-inspired control."""
+        steps = int(duration / dt)
+        t = np.linspace(0, duration, steps)
+        
+        # Initial state: slightly bent arm at rest
+        initial_pos = np.column_stack([
+            np.linspace(0, self.segments, self.segments + 1),
+            np.sin(np.linspace(0, np.pi, self.segments + 1)) * 0.5
+        ])
+        initial_state = np.concatenate([
+            initial_pos.flatten(),
+            np.zeros((self.segments + 1) * 2)
+        ])
+        
+        # Bio-inspired periodic control input
+        control_input = 0.1 * np.array([
+            np.sin(2 * np.pi * t / 2) for _ in range(self.segments)
+        ])
+        
+        # Solve ODE
+        solution = odeint(
+            self.dynamics, 
+            initial_state, 
+            t, 
+            args=(control_input.T,)
+        )
+        
+        return solution, t
+
+# Visualization of soft robotic arm movement
+robot = SoftRobotArm(segments=4)
+solution, t = robot.simulate()
+
+plt.figure(figsize=(10, 6))
+for i in range(len(t)//10):  # Plot every 10th frame
+    pos = solution[i*10, :robot.segments+1*2].reshape(-1, 2)
+    plt.plot(pos[:, 0], pos[:, 1], 'o-', alpha=0.5)
+plt.title("Bio-Inspired Soft Robotic Arm Movement")
+plt.xlabel("X Position")
+plt.ylabel("Y Position")
+plt.grid(True)
+plt.show()
