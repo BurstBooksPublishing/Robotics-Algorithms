@@ -1,0 +1,87 @@
+import org.apache.commons.math3.ml.clustering.*;
+import org.apache.commons.math3.ml.distance.*;
+import java.util.List;
+
+/**
+ * Demonstrates supervised (k-NN) and unsupervised (k-Means) learning 
+ * for robotic perception and decision-making.
+ * Part of Chapter 7: Learning and Adaptation in Robotics.
+ */
+public class RobotLearning {
+
+    // Supervised Learning: k-Nearest Neighbors for object classification
+    public static class KNNClassifier {
+        private List trainingData;
+        private List labels;
+
+        public KNNClassifier(List trainingData, List labels) {
+            this.trainingData = trainingData;
+            this.labels = labels;
+        }
+
+        public String classify(double[] query, int k) {
+            // Calculate distances and find k-nearest neighbors
+            double[][] distances = new double[trainingData.size()][2];
+            for (int i = 0; i < trainingData.size(); i++) {
+                distances[i][0] = new EuclideanDistance().compute(query, trainingData.get(i));
+                distances[i][1] = i;
+            }
+
+            // Sort by distance and get top k labels
+            java.util.Arrays.sort(distances, (a, b) -> Double.compare(a[0], b[0]));
+            Map labelCount = new HashMap<>();
+            for (int i = 0; i < k; i++) {
+                String label = labels.get((int) distances[i][1]);
+                labelCount.put(label, labelCount.getOrDefault(label, 0) + 1);
+            }
+
+            // Return majority label
+            return Collections.max(labelCount.entrySet(), Map.Entry.comparingByValue()).getKey();
+        }
+    }
+
+    // Unsupervised Learning: k-Means clustering for environment segmentation
+    public static class EnvironmentClusterer {
+        public List> clusterSensors(List points, int k) {
+            KMeansPlusPlusClusterer clusterer = 
+                new KMeansPlusPlusClusterer<>(k, 100, new EuclideanDistance());
+            return clusterer.cluster(points);
+        }
+    }
+
+    // Data point representation for robotic sensors
+    public static class RobotPoint implements Clusterable {
+        private final double[] point;
+
+        public RobotPoint(double[] point) {
+            this.point = point;
+        }
+
+        @Override
+        public double[] getPoint() {
+            return point;
+        }
+    }
+
+    public static void main(String[] args) {
+        // Example usage for robotic learning
+        List trainingData = List.of(
+            new double[]{0.1, 0.2}, new double[]{0.3, 0.4}, 
+            new double[]{0.8, 0.9}, new double[]{0.7, 0.6});
+        List labels = List.of("obstacle", "obstacle", "free", "free");
+
+        // Supervised learning demo
+        KNNClassifier classifier = new KNNClassifier(trainingData, labels);
+        String classification = classifier.classify(new double[]{0.2, 0.3}, 3);
+        System.out.println("Object classified as: " + classification);
+
+        // Unsupervised learning demo
+        List sensorReadings = List.of(
+            new RobotPoint(new double[]{1.0, 2.0}),
+            new RobotPoint(new double[]{1.1, 2.1}),
+            new RobotPoint(new double[]{5.0, 8.0}));
+        EnvironmentClusterer clusterer = new EnvironmentClusterer();
+        List> clusters = clusterer.clusterSensors(sensorReadings, 2);
+        System.out.println("Environment clustered into " + clusters.size() + " regions");
+    }
+}
