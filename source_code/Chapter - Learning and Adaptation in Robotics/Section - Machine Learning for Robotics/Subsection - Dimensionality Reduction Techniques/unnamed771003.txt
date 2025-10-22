@@ -1,0 +1,39 @@
+# Dimensionality Reduction for Robotics Perception (PCA & t-SNE)
+# Context: Chapter 7 - Learning and Adaptation in Robotics
+
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+
+# Simulate high-dimensional sensor data (e.g., LIDAR + camera features)
+np.random.seed(42)
+n_samples = 200
+n_features = 50  # Original dimensionality
+X = np.random.randn(n_samples, n_features)  # Synthetic sensor data
+
+# PCA for linear dimensionality reduction
+pca = PCA(n_components=2)  # Reduce to 2D for visualization
+X_pca = pca.fit_transform(X)
+
+# t-SNE for non-linear manifold learning
+tsne = TSNE(n_components=2, perplexity=30, n_iter=300)
+X_tsne = tsne.fit_transform(X)
+
+# Visualization for robotic decision-making
+plt.figure(figsize=(12, 5))
+
+plt.subplot(1, 2, 1)
+plt.scatter(X_pca[:, 0], X_pca[:, 1], c=np.arange(n_samples), cmap='viridis')
+plt.title('PCA Projection of Sensor Data')
+plt.xlabel('Principal Component 1')
+plt.ylabel('Principal Component 2')
+
+plt.subplot(1, 2, 2)
+plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=np.arange(n_samples), cmap='viridis')
+plt.title('t-SNE Projection of Sensor Data')
+plt.xlabel('t-SNE Dimension 1')
+plt.ylabel('t-SNE Dimension 2')
+
+plt.tight_layout()
+plt.show()
