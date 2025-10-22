@@ -1,0 +1,69 @@
+import numpy as np
+from scipy.spatial import KDTree
+
+class ConfigurationSpace:
+    """A class to represent the configuration space (C-Space) for motion planning."""
+    
+    def __init__(self, bounds, obstacles=None):
+        """
+        Initialize the C-Space with bounds and obstacles.
+        
+        Args:
+            bounds (list of tuples): Min/max bounds for each dimension, e.g., [(x_min, x_max), (y_min, y_max)].
+            obstacles (list of np.ndarray, optional): List of obstacle vertices (each as a numpy array).
+        """
+        self.bounds = bounds
+        self.dimensions = len(bounds)
+        self.obstacles = obstacles if obstacles else []
+        
+        # Precompute obstacle KDTree for efficient collision checking
+        if self.obstacles:
+            self.obstacle_tree = KDTree(np.vstack(self.obstacles))
+        else:
+            self.obstacle_tree = None
+    
+    def is_valid_configuration(self, q, clearance=0.1):
+        """
+        Check if a configuration q is valid (within bounds and collision-free).
+        
+        Args:
+            q (np.ndarray): Configuration to check.
+            clearance (float): Minimum distance to obstacles.
+            
+        Returns:
+            bool: True if valid, False otherwise.
+        """
+        # Check bounds
+        for i, (min_val, max_val) in enumerate(self.bounds):
+            if not (min_val <= q[i] <= max_val):
+                return False
+        
+        # Check collisions if obstacles exist
+        if self.obstacle_tree and len(q) == self.dimensions:
+            dist, _ = self.obstacle_tree.query(q)
+            if dist < clearance:
+                return False
+        
+        return True
+    
+    def sample_configuration(self):
+        """Sample a random configuration within bounds."""
+        return np.array([np.random.uniform(low, high) for low, high in self.bounds])
+    
+    def check_path(self, q_start, q_end, steps=10):
+        """
+        Check if a straight-line path between two configurations is valid.
+        
+        Args:
+            q_start (np.ndarray): Start configuration.
+            q_end (np.ndarray): End configuration.
+            steps (int): Number of intermediate steps to check.
+            
+        Returns:
+            bool: True if path is valid, False otherwise.
+        """
+        for t in np.linspace(0, 1, steps):
+            q_interp = q_start + t * (q_end - q_start)
+            if not self.is_valid_configuration(q_interp):
+                return False
+        return True
