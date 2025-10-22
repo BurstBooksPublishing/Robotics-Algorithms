@@ -1,0 +1,70 @@
+/**
+ * Feedback Linearization for a 2-DOF robotic arm.
+ * Implements a nonlinear control law to linearize the system dynamics.
+ * Assumes known dynamics model for simplicity.
+ */
+public class FeedbackLinearization {
+    private double[] q;      // Joint positions [rad]
+    private double[] qDot;   // Joint velocities [rad/s]
+    private double[] tau;    // Computed torques [Nm]
+
+    // Robot parameters: mass, length, inertia, etc.
+    private final double m1 = 1.0, m2 = 1.0;
+    private final double l1 = 1.0, l2 = 1.0;
+    private final double g = 9.81;
+
+    public FeedbackLinearization() {
+        q = new double[2];
+        qDot = new double[2];
+        tau = new double[2];
+    }
+
+    /**
+     * Computes feedback-linearizing control law
+     * @param qDesired Desired joint positions [rad]
+     * @param qDotDesired Desired joint velocities [rad/s]
+     */
+    public void computeControl(double[] qDesired, double[] qDotDesired) {
+        // Compute Coriolis and gravity terms (simplified model)
+        double c2 = Math.cos(q[1]);
+        double s2 = Math.sin(q[1]);
+        double h = -m2 * l1 * l2 * s2;
+
+        // Inertia matrix M(q)
+        double[][] M = {
+            {m1 * l1 * l1 + m2 * (l1 * l1 + l2 * l2 + 2 * l1 * l2 * c2), m2 * (l2 * l2 + l1 * l2 * c2)},
+            {m2 * (l2 * l2 + l1 * l2 * c2), m2 * l2 * l2}
+        };
+
+        // Coriolis and centrifugal terms C(q,qDot)
+        double[][] C = {
+            {h * qDot[1], h * (qDot[0] + qDot[1])},
+            {-h * qDot[0], 0}
+        };
+
+        // Gravity terms G(q)
+        double[] G = {
+            (m1 + m2) * l1 * g * Math.cos(q[0]) + m2 * l2 * g * Math.cos(q[0] + q[1]),
+            m2 * l2 * g * Math.cos(q[0] + q[1])
+        };
+
+        // Feedback linearization: u = M(q)v + C(q,qDot)qDot + G(q)
+        double kp = 10.0, kd = 5.0;  // PD gains
+        double[] v = new double[2];
+        for (int i = 0; i < 2; i++) {
+            v[i] = kp * (qDesired[i] - q[i]) + kd * (qDotDesired[i] - qDot[i]);
+        }
+
+        // Compute final torque
+        for (int i = 0; i < 2; i++) {
+            tau[i] = M[i][0] * v[0] + M[i][1] * v[1];
+            tau[i] += C[i][0] * qDot[0] + C[i][1] * qDot[1];
+            tau[i] += G[i];
+        }
+    }
+
+    // Getters for computed torque
+    public double[] getTau() {
+        return tau;
+    }
+}
