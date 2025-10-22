@@ -1,0 +1,51 @@
+import numpy as np
+import networkx as nx
+from typing import List, Dict, Tuple
+
+class DecentralizedPlanner:
+    """Decentralized path planning for multi-robot systems using potential fields."""
+    
+    def __init__(self, robot_id: int, neighbors: List[int], env_size: Tuple[int, int]):
+        self.id = robot_id
+        self.neighbors = neighbors  # IDs of neighboring robots
+        self.env_size = env_size
+        self.position = np.random.rand(2) * env_size  # Random initial position
+        self.goal = np.random.rand(2) * env_size  # Random goal position
+        self.communication_graph = nx.Graph()  # Local communication network
+
+    def update_communication_graph(self, neighbor_positions: Dict[int, np.ndarray]):
+        """Update local communication graph with neighbor positions."""
+        self.communication_graph.add_node(self.id, pos=self.position)
+        for neighbor_id, pos in neighbor_positions.items():
+            self.communication_graph.add_node(neighbor_id, pos=pos)
+            self.communication_graph.add_edge(self.id, neighbor_id)
+
+    def compute_repulsive_force(self, obstacle_pos: np.ndarray, radius: float = 1.0) -> np.ndarray:
+        """Compute repulsive force from obstacles/other robots."""
+        diff = self.position - obstacle_pos
+        dist = np.linalg.norm(diff)
+        if dist < radius:
+            return (radius - dist) * (diff / (dist + 1e-6))  # Avoid division by zero
+        return np.zeros(2)
+
+    def decentralized_path_planning(self, neighbor_positions: Dict[int, np.ndarray], obstacles: List[np.ndarray]) -> np.ndarray:
+        """Compute next step using decentralized potential fields."""
+        # Update local knowledge of neighbors
+        self.update_communication_graph(neighbor_positions)
+        
+        # Attractive force to goal
+        attractive_force = 0.1 * (self.goal - self.position)
+        
+        # Repulsive forces from obstacles and neighbors
+        repulsive_force = np.zeros(2)
+        for obs in obstacles:
+            repulsive_force += self.compute_repulsive_force(obs)
+        for neighbor_id, pos in neighbor_positions.items():
+            repulsive_force += self.compute_repulsive_force(pos)
+        
+        # Combine forces and clamp to max step size
+        total_force = attractive_force + repulsive_force
+        step_size = 0.5
+        next_step = self.position + step_size * (total_force / (np.linalg.norm(total_force) + 1e-6))
+        
+        return np.clip(next_step, [0, 0], self.env_size)  # Keep within environment bounds
