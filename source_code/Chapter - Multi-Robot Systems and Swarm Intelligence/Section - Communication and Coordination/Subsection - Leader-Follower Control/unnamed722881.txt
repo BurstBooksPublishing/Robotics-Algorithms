@@ -1,0 +1,67 @@
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Leader-Follower Control for multi-robot systems.
+ * Implements a simple leader-follower algorithm where followers maintain
+ * a formation relative to the leader's position.
+ */
+public class LeaderFollowerControl {
+    private Robot leader;
+    private List followers;
+    private double desiredDistance; // Desired distance between leader and followers
+
+    public LeaderFollowerControl(Robot leader, List followers, double desiredDistance) {
+        this.leader = leader;
+        this.followers = new ArrayList<>(followers);
+        this.desiredDistance = desiredDistance;
+    }
+
+    /**
+     * Updates the positions of all followers based on the leader's current position.
+     */
+    public void updateFormation() {
+        Point leaderPosition = leader.getPosition();
+        double leaderOrientation = leader.getOrientation();
+
+        for (int i = 0; i < followers.size(); i++) {
+            Robot follower = followers.get(i);
+            
+            // Calculate follower's desired position in formation
+            double angleOffset = (2 * Math.PI / followers.size()) * i;
+            double targetX = leaderPosition.x + desiredDistance * Math.cos(leaderOrientation + angleOffset);
+            double targetY = leaderPosition.y + desiredDistance * Math.sin(leaderOrientation + angleOffset);
+            
+            // Move follower toward target position
+            follower.moveTo(targetX, targetY);
+        }
+    }
+
+    // Simple Robot class representing a mobile robot
+    static class Robot {
+        private Point position;
+        private double orientation;
+
+        public Robot(double x, double y, double orientation) {
+            this.position = new Point(x, y);
+            this.orientation = orientation;
+        }
+
+        public Point getPosition() { return position; }
+        public double getOrientation() { return orientation; }
+
+        public void moveTo(double x, double y) {
+            // Implementation of movement logic would go here
+            this.position = new Point(x, y);
+        }
+    }
+
+    // Simple Point class for 2D coordinates
+    static class Point {
+        public double x, y;
+        public Point(double x, double y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+}
