@@ -1,0 +1,71 @@
+// SoftRoboticsController.java
+// Demonstrates a bio-inspired soft robotics controller using morphological computation
+// Context: Robotics Algorithms - Chapter 10: Legged and Aerial Robotics - Bio-Inspired Robotics
+
+import java.util.Arrays;
+
+public class SoftRoboticsController {
+    // Parameters for soft actuator dynamics
+    private static final double STIFFNESS = 0.85;
+    private static final double DAMPING = 0.15;
+    private static final double MORPH_GAIN = 1.2; // Morphological computation gain factor
+    
+    // Bio-inspired oscillator for rhythmic movement
+    private class CentralPatternGenerator {
+        private double phase;
+        private final double frequency;
+        
+        public CentralPatternGenerator(double freq) {
+            this.frequency = freq;
+            this.phase = 0.0;
+        }
+        
+        public double[] update(double dt) {
+            phase += dt * frequency;
+            // Output phase-shifted signals for multiple actuators
+            return new double[]{
+                Math.sin(phase),
+                Math.sin(phase + Math.PI/2),
+                Math.sin(phase + Math.PI)
+            };
+        }
+    }
+
+    // Soft actuator model with morphological properties
+    private double[] computeActuatorForces(double[] cpgSignals, double[] currentState) {
+        double[] forces = new double[cpgSignals.length];
+        for (int i = 0; i < cpgSignals.length; i++) {
+            // Combine CPG signal with morphological computation
+            forces[i] = MORPH_GAIN * (STIFFNESS * cpgSignals[i] - DAMPING * currentState[i]);
+        }
+        return forces;
+    }
+
+    // Main control loop for soft robotic movement
+    public void runControlLoop() {
+        CentralPatternGenerator cpg = new CentralPatternGenerator(0.5); // 0.5 Hz frequency
+        double[] currentState = new double[3]; // Simulated actuator states
+        
+        // Simulation parameters
+        double dt = 0.01; // 10ms time step
+        double duration = 10.0; // 10 second simulation
+        
+        for (double t = 0; t < duration; t += dt) {
+            double[] cpgOutput = cpg.update(dt);
+            double[] forces = computeActuatorForces(cpgOutput, currentState);
+            
+            // Update actuator states (simplified dynamics)
+            for (int i = 0; i < currentState.length; i++) {
+                currentState[i] += forces[i] * dt;
+            }
+            
+            // Log current state (in real system would send to actuators)
+            System.out.println("t=" + t + " Actuator states: " + Arrays.toString(currentState));
+        }
+    }
+
+    public static void main(String[] args) {
+        SoftRoboticsController controller = new SoftRoboticsController();
+        controller.runControlLoop();
+    }
+}
