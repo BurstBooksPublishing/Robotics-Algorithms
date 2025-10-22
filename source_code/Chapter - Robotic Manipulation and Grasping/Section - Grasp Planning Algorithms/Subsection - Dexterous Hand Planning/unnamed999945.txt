@@ -1,0 +1,138 @@
+import java.util.List;
+import java.util.ArrayList;
+
+/**
+ * DexterousHandPlanner - A grasp planning algorithm for multi-fingered robotic hands.
+ * Simulates contact point optimization and force closure analysis.
+ */
+public class DexterousHandPlanner {
+    private List contactPoints;
+    private double minForceClosureQuality;
+
+    public DexterousHandPlanner() {
+        this.contactPoints = new ArrayList<>();
+        this.minForceClosureQuality = 0.7; // Threshold for stable grasp
+    }
+
+    /**
+     * Adds a potential contact point to the planner
+     * @param point 3D position in object frame
+     * @param normal Surface normal at contact
+     */
+    public void addContactPoint(Vector3D point, Vector3D normal) {
+        contactPoints.add(new ContactPoint(point, normal));
+    }
+
+    /**
+     * Computes force closure quality metric (0 to 1)
+     * @return Quality score based on wrench space analysis
+     */
+    public double computeForceClosure() {
+        if (contactPoints.size() < 3) return 0.0; // Need at least 3 contacts
+
+        WrenchSpace wrenchSpace = new WrenchSpace();
+        for (ContactPoint cp : contactPoints) {
+            wrenchSpace.addWrench(cp.computeWrench());
+        }
+        return wrenchSpace.computeQuality();
+    }
+
+    /**
+     * Optimizes contact points using gradient descent
+     * @param maxIterations Maximum optimization steps
+     */
+    public void optimizeContacts(int maxIterations) {
+        for (int i = 0; i < maxIterations; i++) {
+            double currentQuality = computeForceClosure();
+            if (currentQuality >= minForceClosureQuality) break;
+
+            // Perturb contact points and check improvement
+            for (ContactPoint cp : contactPoints) {
+                Vector3D originalPos = cp.getPosition();
+                cp.setPosition(originalPos.add(randomPerturbation()));
+                double newQuality = computeForceClosure();
+
+                if (newQuality <= currentQuality) {
+                    cp.setPosition(originalPos); // Revert if no improvement
+                }
+            }
+        }
+    }
+
+    private Vector3D randomPerturbation() {
+        return new Vector3D(
+            Math.random() * 0.01 - 0.005,
+            Math.random() * 0.01 - 0.005,
+            Math.random() * 0.01 - 0.005
+        );
+    }
+
+    // Helper classes
+    class ContactPoint {
+        private Vector3D position;
+        private Vector3D normal;
+
+        public ContactPoint(Vector3D pos, Vector3D norm) {
+            this.position = pos;
+            this.normal = norm;
+        }
+
+        public Wrench computeWrench() {
+            return new Wrench(position, normal);
+        }
+
+        public Vector3D getPosition() { return position; }
+        public void setPosition(Vector3D pos) { this.position = pos; }
+    }
+
+    class Wrench {
+        private Vector3D force;
+        private Vector3D torque;
+
+        public Wrench(Vector3D pos, Vector3D normal) {
+            this.force = normal.normalize();
+            this.torque = pos.cross(force);
+        }
+    }
+
+    class WrenchSpace {
+        private List wrenches = new ArrayList<>();
+
+        public void addWrench(Wrench w) {
+            wrenches.add(w);
+        }
+
+        public double computeQuality() {
+            // Simplified quality metric (actual implementation would use convex hull)
+            return Math.min(1.0, wrenches.size() / 6.0);
+        }
+    }
+}
+
+// Basic 3D vector implementation for completeness
+class Vector3D {
+    public double x, y, z;
+
+    public Vector3D(double x, double y, double z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+
+    public Vector3D add(Vector3D other) {
+        return new Vector3D(x + other.x, y + other.y, z + other.z);
+    }
+
+    public Vector3D cross(Vector3D other) {
+        return new Vector3D(
+            y * other.z - z * other.y,
+            z * other.x - x * other.z,
+            x * other.y - y * other.x
+        );
+    }
+
+    public Vector3D normalize() {
+        double mag = Math.sqrt(x*x + y*y + z*z);
+        return new Vector3D(x/mag, y/mag, z/mag);
+    }
+}
