@@ -1,0 +1,117 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.spatial import KDTree
+from queue import PriorityQueue
+
+class TerrainMapper:
+    def __init__(self, grid_resolution=0.5):
+        """Initialize terrain mapper with grid resolution (meters)."""
+        self.grid_resolution = grid_resolution
+        self.terrain_grid = None
+        self.obstacle_kdtree = None
+        
+    def update_terrain(self, sensor_data):
+        """Update terrain grid with new sensor data (lidar/point cloud)."""
+        points = np.array(sensor_data)
+        
+        # Create grid if not initialized
+        if self.terrain_grid is None:
+            min_coords = np.min(points, axis=0)
+            max_coords = np.max(points, axis=0)
+            grid_shape = ((max_coords - min_coords) / self.grid_resolution).astype(int) + 1
+            self.terrain_grid = np.full(grid_shape, -1, dtype=np.float32)  # -1 = unexplored
+            
+        # Convert points to grid coordinates
+        grid_coords = ((points - np.min(points, axis=0)) / self.grid_resolution).astype(int)
+        
+        # Update grid values (0 = free, 1 = obstacle)
+        for coord in grid_coords:
+            self.terrain_grid[tuple(coord)] = 1 if self._is_obstacle(coord) else 0
+        
+        # Build KDTree for obstacle queries
+        obstacle_coords = np.argwhere(self.terrain_grid == 1)
+        if len(obstacle_coords) > 0:
+            self.obstacle_kdtree = KDTree(obstacle_coords)
+    
+    def _is_obstacle(self, coord):
+        """Check if grid cell contains an obstacle (simplified)."""
+        # In real implementation, use sensor data and terrain analysis
+        return np.random.random() < 0.1  # 10% chance of obstacle for demo
+    
+    def explore_frontier(self, current_pos):
+        """Frontier-based exploration algorithm."""
+        frontiers = self._find_frontiers()
+        if not frontiers:
+            return None
+            
+        # Find nearest frontier using A*
+        path = self._a_star(current_pos, frontiers[0])
+        return path
+    
+    def _find_frontiers(self):
+        """Identify frontier cells between explored and unexplored areas."""
+        frontiers = []
+        if self.terrain_grid is None:
+            return frontiers
+            
+        # Simple 4-neighbor frontier detection
+        for idx, val in np.ndenumerate(self.terrain_grid):
+            if val == 0:  # Only check free cells
+                for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
+                    ni, nj = idx[0]+dx, idx[1]+dy
+                    if (0 <= ni < self.terrain_grid.shape[0] and 
+                        0 <= nj < self.terrain_grid.shape[1] and 
+                        self.terrain_grid[ni,nj] == -1):
+                        frontiers.append(idx)
+                        break
+        return frontiers
+    
+    def _a_star(self, start, goal):
+        """A* path planning algorithm with obstacle avoidance."""
+        open_set = PriorityQueue()
+        open_set.put((0, start))
+        came_from = {}
+        g_score = {tuple(start): 0}
+        
+        while not open_set.empty():
+            _, current = open_set.get()
+            
+            if current == goal:
+                path = []
+                while current in came_from:
+                    path.append(current)
+                    current = came_from[current]
+                return path[::-1]
+                
+            for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
+                neighbor = (current[0]+dx, current[1]+dy)
+                
+                # Check bounds and obstacles
+                if (0 <= neighbor[0] < self.terrain_grid.shape[0] and 
+                    0 <= neighbor[1] < self.terrain_grid.shape[1] and 
+                    self.terrain_grid[neighbor] != 1):
+                    
+                    tentative_g = g_score[current] + 1
+                    if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                        came_from[neighbor] = current
+                        g_score[neighbor] = tentative_g
+                        f_score = tentative_g + self._heuristic(neighbor, goal)
+                        open_set.put((f_score, neighbor))
+        return None
+    
+    def _heuristic(self, a, b):
+        """Euclidean distance heuristic for A*."""
+        return np.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2)
+
+# Example usage
+if __name__ == "__main__":
+    mapper = TerrainMapper()
+    
+    # Simulate sensor data (random points in 10x10m area)
+    sensor_data = np.random.rand(100, 2) * 10
+    mapper.update_terrain(sensor_data)
+    
+    # Visualize terrain
+    plt.imshow(mapper.terrain_grid.T, origin='lower')
+    plt.title("Terrain Map (White=Unexplored, Green=Free, Red=Obstacle)")
+    plt.show()
