@@ -1,0 +1,64 @@
+import sys
+from controller import Robot, Supervisor
+import numpy as np
+
+# Initialize the supervisor to manage multiple robots
+supervisor = Supervisor()
+timestep = int(supervisor.getBasicTimeStep())
+
+# Define robot names and their controllers
+robot_names = ['robot1', 'robot2', 'robot3']
+robots = {}
+
+# Initialize each robot and enable their devices
+for name in robot_names:
+    node = supervisor.getFromDef(name)
+    if node is None:
+        print(f"Error: {name} not found in simulation")
+        sys.exit(1)
+    
+    # Store robot references and enable motors/sensors
+    robot = {
+        'node': node,
+        'left_motor': supervisor.getDevice(f"{name}_left_motor"),
+        'right_motor': supervisor.getDevice(f"{name}_right_motor"),
+        'gps': supervisor.getDevice(f"{name}_gps")
+    }
+    robot['left_motor'].setPosition(float('inf'))
+    robot['right_motor'].setPosition(float('inf'))
+    robot['left_motor'].setVelocity(0.0)
+    robot['right_motor'].setVelocity(0.0)
+    robot['gps'].enable(timestep)
+    robots[name] = robot
+
+# Swarm coordination algorithm parameters
+TARGET_POSITION = np.array([1.5, 0.0, 1.5])
+FORMATION_RADIUS = 0.5
+
+def compute_formation_positions(target, count, radius):
+    """Calculate circular formation positions around target"""
+    angles = np.linspace(0, 2*np.pi, count, endpoint=False)
+    return [target + radius * np.array([np.cos(a), 0, np.sin(a)]) for a in angles]
+
+# Main simulation loop
+while supervisor.step(timestep) != -1:
+    formation_positions = compute_formation_positions(
+        TARGET_POSITION, len(robot_names), FORMATION_RADIUS
+    )
+    
+    for idx, (name, robot) in enumerate(robots.items()):
+        # Get current position from GPS
+        current_pos = np.array(robot['gps'].getValues())
+        target_pos = formation_positions[idx]
+        
+        # Simple P controller for movement
+        error = target_pos - current_pos
+        direction = np.arctan2(error[0], error[2])
+        
+        # Set motor speeds based on direction error
+        base_speed = 2.0
+        left_speed = base_speed - np.sin(direction) * 1.5
+        right_speed = base_speed + np.sin(direction) * 1.5
+        
+        robot['left_motor'].setVelocity(left_speed)
+        robot['right_motor'].setVelocity(right_speed)
