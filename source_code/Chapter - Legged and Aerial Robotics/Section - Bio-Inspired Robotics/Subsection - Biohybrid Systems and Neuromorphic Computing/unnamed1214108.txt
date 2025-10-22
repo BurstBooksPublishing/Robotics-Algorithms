@@ -1,0 +1,62 @@
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Dense, LeakyReLU
+from tensorflow.keras.models import Model
+
+# Define a biohybrid spiking neural network (SNN) for legged robot control
+class BiohybridSNN:
+    def __init__(self, input_dim, hidden_dims, output_dim):
+        """Initialize a biohybrid SNN with neuromorphic computing principles.
+        
+        Args:
+            input_dim: Dimension of sensory input (e.g., proprioception)
+            hidden_dims: List of hidden layer dimensions (mimicking biological neurons)
+            output_dim: Motor output dimension (e.g., joint angles)
+        """
+        self.input_dim = input_dim
+        self.hidden_dims = hidden_dims
+        self.output_dim = output_dim
+        self.model = self._build_model()
+        
+    def _build_model(self):
+        """Construct a bio-inspired SNN with leaky integrate-and-fire (LIF) dynamics."""
+        inputs = Input(shape=(self.input_dim,))
+        
+        # Bio-inspired hidden layers with LIF-like activation
+        x = inputs
+        for dim in self.hidden_dims:
+            x = Dense(dim)(x)
+            x = LeakyReLU(alpha=0.3)(x)  # Approximates LIF neuron behavior
+            
+        # Motor output layer with sigmoid for bounded control signals
+        outputs = Dense(self.output_dim, activation='sigmoid')(x)
+        
+        return Model(inputs, outputs)
+    
+    def train(self, X, y, epochs=100):
+        """Train the network using bio-inspired learning rules."""
+        self.model.compile(optimizer='adam', loss='mse')
+        history = self.model.fit(X, y, epochs=epochs, verbose=0)
+        return history
+
+# Example usage for legged robot gait control
+if __name__ == "__main__":
+    # Simulate sensory input (proprioception + terrain feedback)
+    num_samples = 1000
+    input_dim = 12  # 6 joint angles + 6 terrain features
+    output_dim = 6   # Target joint torques
+    
+    # Generate synthetic training data
+    X = np.random.randn(num_samples, input_dim)
+    y = np.random.rand(num_samples, output_dim)
+    
+    # Initialize and train biohybrid controller
+    snn = BiohybridSNN(input_dim=input_dim, 
+                      hidden_dims=[64, 32], 
+                      output_dim=output_dim)
+    history = snn.train(X, y)
+    
+    # Simulate real-time control (neuromorphic deployment would use event-based processing)
+    test_input = np.random.randn(1, input_dim)
+    predicted_torques = snn.model.predict(test_input)
+    print("Predicted joint torques:", predicted_torques)
