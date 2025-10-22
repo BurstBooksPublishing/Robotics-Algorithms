@@ -1,0 +1,66 @@
+import numpy as np
+from scipy.spatial.distance import euclidean
+
+class ForceFeedbackController:
+    """Implements force feedback algorithms for haptic teleoperation."""
+    
+    def __init__(self, max_force=10.0, damping_coeff=0.5):
+        """
+        Initialize force feedback parameters.
+        
+        Args:
+            max_force (float): Maximum allowable feedback force (N)
+            damping_coeff (float): Viscous damping coefficient (Ns/m)
+        """
+        self.max_force = max_force
+        self.damping_coeff = damping_coeff
+        self.prev_position = None
+        
+    def compute_force(self, current_pos, target_pos, velocity):
+        """
+        Calculate force feedback based on position error and velocity.
+        
+        Args:
+            current_pos (np.array): Current end-effector position [x, y, z]
+            target_pos (np.array): Desired position [x, y, z]
+            velocity (np.array): Current end-effector velocity [vx, vy, vz]
+            
+        Returns:
+            np.array: Computed force vector [Fx, Fy, Fz]
+        """
+        # Position error (spring force component)
+        error = target_pos - current_pos
+        spring_force = error * 0.8  # Proportional gain
+        
+        # Damping force component
+        damping_force = -self.damping_coeff * velocity
+        
+        # Combine forces with saturation
+        total_force = spring_force + damping_force
+        force_magnitude = euclidean(total_force, np.zeros(3))
+        
+        # Apply force limits
+        if force_magnitude > self.max_force:
+            total_force = (total_force / force_magnitude) * self.max_force
+            
+        return total_force
+    
+    def virtual_wall_force(self, current_pos, wall_normal, wall_pos):
+        """
+        Simulate a virtual wall with repulsive force.
+        
+        Args:
+            current_pos (np.array): Current position [x, y, z]
+            wall_normal (np.array): Wall normal vector (unit length)
+            wall_pos (np.array): Point on wall surface
+            
+        Returns:
+            np.array: Repulsive force vector
+        """
+        distance = np.dot(wall_normal, (current_pos - wall_pos))
+        
+        if distance < 0:  # Penetrating the wall
+            # Exponential repulsive force
+            force_mag = 50 * np.exp(-2 * distance) - 50
+            return -force_mag * wall_normal
+        return np.zeros(3)
