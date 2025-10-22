@@ -1,0 +1,164 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.spatial import KDTree
+
+class ProbabilisticRoadmap:
+    def __init__(self, bounds, obstacles, n_samples=1000, k_neighbors=10):
+        """
+        Initialize PRM planner with bounds, obstacles, and parameters.
+        
+        Args:
+            bounds: Tuple ((x_min, x_max), (y_min, y_max)) for workspace.
+            obstacles: List of obstacle polygons (each as numpy array of vertices).
+            n_samples: Number of random samples to generate.
+            k_neighbors: Number of nearest neighbors to consider for connections.
+        """
+        self.bounds = bounds
+        self.obstacles = obstacles
+        self.n_samples = n_samples
+        self.k_neighbors = k_neighbors
+        self.samples = None
+        self.graph = {}  # Adjacency list representation
+        self.kd_tree = None
+
+    def is_collision_free(self, point):
+        """Check if a point is collision-free (not inside any obstacle)."""
+        for obstacle in self.obstacles:
+            if self._point_in_polygon(point, obstacle):
+                return False
+        return True
+
+    def _point_in_polygon(self, point, polygon):
+        """Ray casting algorithm to check if point is inside polygon."""
+        x, y = point
+        n = len(polygon)
+        inside = False
+        p1x, p1y = polygon[0]
+        for i in range(n + 1):
+            p2x, p2y = polygon[i % n]
+            if y > min(p1y, p2y):
+                if y <= max(p1y, p2y):
+                    if x <= max(p1x, p2x):
+                        if p1y != p2y:
+                            xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                        if p1x == p2x or x <= xinters:
+                            inside = not inside
+            p1x, p1y = p2x, p2y
+        return inside
+
+    def generate_samples(self):
+        """Generate random collision-free samples in the workspace."""
+        samples = []
+        while len(samples) < self.n_samples:
+            x = np.random.uniform(self.bounds[0][0], self.bounds[0][1])
+            y = np.random.uniform(self.bounds[1][0], self.bounds[1][1])
+            if self.is_collision_free((x, y)):
+                samples.append((x, y))
+        self.samples = np.array(samples)
+        self.kd_tree = KDTree(self.samples)
+
+    def build_roadmap(self):
+        """Build the roadmap by connecting samples to their k-nearest neighbors."""
+        for i, point in enumerate(self.samples):
+            self.graph[i] = []
+            distances, indices = self.kd_tree.query(point, k=self.k_neighbors + 1)
+            for j in indices[1:]:  # Skip self (first neighbor)
+                if self._is_edge_valid(point, self.samples[j]):
+                    self.graph[i].append(j)
+
+    def _is_edge_valid(self, p1, p2):
+        """Check if the straight-line path between two points is collision-free."""
+        # Simple discretization check (can be replaced with more robust collision checking)
+        n_checks = 10
+        for t in np.linspace(0, 1, n_checks):
+            point = p1 + t * (p2 - p1)
+            if not self.is_collision_free(point):
+                return False
+        return True
+
+    def query_path(self, start, goal):
+        """Find a path from start to goal using the roadmap."""
+        # Add start and goal to the roadmap temporarily
+        start_idx = len(self.samples)
+        goal_idx = start_idx + 1
+        self.samples = np.vstack([self.samples, start, goal])
+        
+        # Connect start and goal to their nearest neighbors
+        self.graph[start_idx] = []
+        self.graph[goal_idx] = []
+        
+        for idx, point in [(start_idx, start), (goal_idx, goal)]:
+            distances, indices = self.kd_tree.query(point, k=self.k_neighbors)
+            for j in indices:
+                if self._is_edge_valid(point, self.samples[j]):
+                    self.graph[idx].append(j)
+                    self.graph[j].append(idx)
+        
+        # Perform A* search on the graph
+        path = self._astar(start_idx, goal_idx)
+        
+        # Remove temporary nodes
+        self.samples = self.samples[:-2]
+        del self.graph[start_idx]
+        del self.graph[goal_idx]
+        
+        return [start] + [self.samples[i] for i in path] + [goal] if path else None
+
+    def _astar(self, start, goal):
+        """A* algorithm to find shortest path in the graph."""
+        open_set = {start}
+        came_from = {}
+        g_score = {node: float('inf') for node in self.graph}
+        g_score[start] = 0
+        f_score = {node: float('inf') for node in self.graph}
+        f_score[start] = np.linalg.norm(self.samples[start] - self.samples[goal])
+        
+        while open_set:
+            current = min(open_set, key=lambda node: f_score[node])
+            if current == goal:
+                path = []
+                while current in came_from:
+                    path.append(current)
+                    current = came_from[current]
+                return path[::-1]
+            
+            open_set.remove(current)
+            for neighbor in self.graph[current]:
+                tentative_g = g_score[current] + np.linalg.norm(
+                    self.samples[current] - self.samples[neighbor])
+                if tentative_g < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g
+                    f_score[neighbor] = tentative_g + np.linalg.norm(
+                        self.samples[neighbor] - self.samples[goal])
+                    if neighbor not in open_set:
+                        open_set.add(neighbor)
+        return None
+
+# Example usage
+if __name__ == "__main__":
+    # Define workspace bounds and obstacles
+    bounds = ((0, 10), (0, 10))
+    obstacles = [
+        np.array([[2, 2], [2, 5], [5, 5], [5, 2]]),
+        np.array([[7, 7], [7, 8], [8, 8], [8, 7]])
+    ]
+    
+    # Create and build PRM
+    prm = ProbabilisticRoadmap(bounds, obstacles, n_samples=500, k_neighbors=15)
+    prm.generate_samples()
+    prm.build_roadmap()
+    
+    # Query a path
+    start = np.array([1, 1])
+    goal = np.array([9, 9])
+    path = prm.query_path(start, goal)
+    
+    # Visualization
+    plt.figure(figsize=(8, 8))
+    for obstacle in obstacles:
+        plt.fill(obstacle[:, 0], obstacle[:, 1], 'r', alpha=0.5)
+    plt.scatter(prm.samples[:, 0], prm.samples[:, 1], s=5, c='b')
+    for node, neighbors in prm.graph.items():
+        for neighbor in neighbors:
+            plt.plot([prm.samples[node][0], prm.samples[neighbor][0]],
