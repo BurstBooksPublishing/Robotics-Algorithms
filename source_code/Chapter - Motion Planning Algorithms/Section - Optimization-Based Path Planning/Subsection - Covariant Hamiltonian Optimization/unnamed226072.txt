@@ -1,0 +1,63 @@
+import org.ejml.simple.SimpleMatrix;
+
+/**
+ * Covariant Hamiltonian Optimization for Robotics Motion Planning.
+ * Optimizes trajectories using Hamiltonian mechanics with covariant gradients.
+ * Context: Chapter 2 - Motion Planning Algorithms, Section: Optimization-Based Path Planning.
+ */
+public class CovariantHamiltonianOptimizer {
+    private SimpleMatrix q; // Generalized coordinates (robot state)
+    private SimpleMatrix p; // Generalized momenta
+    private double dt;      // Time step
+    private int maxSteps;   // Maximum optimization iterations
+
+    public CovariantHamiltonianOptimizer(SimpleMatrix initialState, double dt, int maxSteps) {
+        this.q = initialState;
+        this.p = new SimpleMatrix(initialState.numRows(), 1); // Initialize momenta
+        this.dt = dt;
+        this.maxSteps = maxSteps;
+    }
+
+    /**
+     * Computes Hamiltonian H(q,p) = kinetic energy + potential energy
+     */
+    private double computeHamiltonian(SimpleMatrix q, SimpleMatrix p) {
+        SimpleMatrix M = computeMassMatrix(q); // Covariant mass matrix
+        SimpleMatrix V = computePotentialGradient(q); // Potential gradient
+
+        // H = 0.5 * p^T M^-1 p + V(q)
+        return 0.5 * p.transpose().mult(M.invert()).mult(p).get(0) + V.elementSum();
+    }
+
+    /**
+     * Covariant gradient update using Hamiltonian mechanics
+     */
+    public void optimizeTrajectory() {
+        for (int i = 0; i < maxSteps; i++) {
+            SimpleMatrix dHdq = computePotentialGradient(q); // ∂H/∂q
+            SimpleMatrix dHdp = computeMassMatrix(q).invert().mult(p); // ∂H/∂p
+
+            // Hamilton's equations: dq/dt = ∂H/∂p, dp/dt = -∂H/∂q
+            q = q.plus(dHdp.scale(dt));
+            p = p.minus(dHdq.scale(dt));
+
+            // Projection to maintain constraints (e.g., joint limits)
+            projectToConstraintManifold(q);
+        }
+    }
+
+    // --- Helper methods ---
+    private SimpleMatrix computeMassMatrix(SimpleMatrix q) {
+        // Placeholder: Implement robot-specific mass matrix
+        return SimpleMatrix.identity(q.numRows());
+    }
+
+    private SimpleMatrix computePotentialGradient(SimpleMatrix q) {
+        // Placeholder: Implement potential field gradient (e.g., obstacle avoidance)
+        return new SimpleMatrix(q.numRows(), 1);
+    }
+
+    private void projectToConstraintManifold(SimpleMatrix q) {
+        // Placeholder: Project q to satisfy constraints (e.g., unit quaternions)
+    }
+}
