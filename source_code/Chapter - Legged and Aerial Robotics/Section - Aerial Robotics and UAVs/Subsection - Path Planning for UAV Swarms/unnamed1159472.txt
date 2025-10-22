@@ -1,0 +1,120 @@
+import numpy as np
+import networkx as nx
+from scipy.spatial import KDTree
+from sklearn.neighbors import radius_neighbors_graph
+
+class UAVSwarmPathPlanner:
+    """Path planning for UAV swarms using decentralized RRT* and flocking control."""
+    
+    def __init__(self, num_uavs=5, bounds=(0, 100)):
+        self.num_uavs = num_uavs
+        self.bounds = bounds
+        self.swarm_positions = np.random.uniform(bounds[0], bounds[1], (num_uavs, 2))
+        self.goal_positions = np.random.uniform(bounds[0], bounds[1], (num_uavs, 2))
+        self.obstacles = self._generate_obstacles()
+        self.communication_radius = 20.0
+        
+    def _generate_obstacles(self, num_obs=10):
+        """Generate random circular obstacles in the environment."""
+        obstacles = []
+        for _ in range(num_obs):
+            center = np.random.uniform(self.bounds[0], self.bounds[1], 2)
+            radius = np.random.uniform(5, 15)
+            obstacles.append((center, radius))
+        return obstacles
+    
+    def _is_collision_free(self, point):
+        """Check if a point is collision-free with obstacles."""
+        for center, radius in self.obstacles:
+            if np.linalg.norm(point - center) <= radius:
+                return False
+        return True
+    
+    def _get_neighbors(self, uav_idx):
+        """Find neighboring UAVs within communication radius."""
+        positions = np.delete(self.swarm_positions, uav_idx, axis=0)
+        tree = KDTree(positions)
+        neighbors = tree.query_ball_point(self.swarm_positions[uav_idx], self.communication_radius)
+        return neighbors
+    
+    def _flocking_control(self, uav_idx):
+        """Apply flocking rules: cohesion, separation, and alignment."""
+        neighbors = self._get_neighbors(uav_idx)
+        if not neighbors:
+            return np.zeros(2)
+            
+        # Cohesion: move toward center of neighbors
+        cohesion = np.mean(self.swarm_positions[neighbors], axis=0) - self.swarm_positions[uav_idx]
+        
+        # Separation: avoid crowding neighbors
+        diff = self.swarm_positions[neighbors] - self.swarm_positions[uav_idx]
+        dist = np.linalg.norm(diff, axis=1)
+        separation = -np.sum(diff / (dist[:, np.newaxis] + 1e-5), axis=0)
+        
+        # Alignment: match velocity with neighbors (simplified)
+        alignment = np.mean(self.swarm_positions[neighbors], axis=0) - self.swarm_positions[uav_idx]
+        
+        return 0.5 * cohesion + 1.0 * separation + 0.3 * alignment
+    
+    def decentralized_rrt_star(self, uav_idx, max_iter=1000):
+        """Decentralized RRT* path planning for a single UAV."""
+        start = self.swarm_positions[uav_idx]
+        goal = self.goal_positions[uav_idx]
+        tree = nx.Graph()
+        tree.add_node(0, pos=start)
+        
+        for i in range(1, max_iter):
+            # Sample random point with bias toward goal
+            if np.random.random() < 0.2:
+                rand_point = goal
+            else:
+                rand_point = np.random.uniform(self.bounds[0], self.bounds[1], 2)
+                
+            # Find nearest node in tree
+            nodes = np.array([data['pos'] for _, data in tree.nodes(data=True)])
+            nearest_idx = np.argmin(np.linalg.norm(nodes - rand_point, axis=1))
+            nearest_node = tree.nodes[nearest_idx]['pos']
+            
+            # Steer toward random point
+            direction = rand_point - nearest_node
+            dist = np.linalg.norm(direction)
+            step_size = min(5.0, dist)
+            new_point = nearest_node + (direction / (dist + 1e-5)) * step_size
+            
+            # Check collision and add to tree
+            if self._is_collision_free(new_point):
+                tree.add_node(i, pos=new_point)
+                tree.add_edge(nearest_idx, i)
+                
+                # Rewire tree for optimal paths
+                near_idxs = [idx for idx, pos in enumerate(nodes) 
+                            if np.linalg.norm(pos - new_point) < 10.0]
+                for near_idx in near_idxs:
+                    near_node = tree.nodes[near_idx]['pos']
+                    if (nx.has_path(tree, 0, near_idx) and 
+                        self._is_collision_free(near_node - new_point)):
+                        new_dist = nx.shortest_path_length(tree, 0, near_idx, weight='weight') + \
+                                   np.linalg.norm(near_node - new_point)
+                        old_dist = nx.shortest_path_length(tree, 0, i, weight='weight')
+                        if new_dist < old_dist:
+                            tree.add_edge(near_idx, i)
+        
+        # Find path to goal if exists
+        goal_nodes = [n for n, data in tree.nodes(data=True) 
+                     if np.linalg.norm(data['pos'] - goal) < 5.0]
+        if goal_nodes:
+            path = nx.shortest_path(tree, 0, goal_nodes[0])
+            return [tree.nodes[n]['pos'] for n in path]
+        return None
+    
+    def update_swarm_paths(self):
+        """Update paths for all UAVs combining RRT* and flocking."""
+        paths = []
+        for i in range(self.num_uavs):
+            path = self.decentralized_rrt_star(i)
+            if path:
+                # Apply flocking control to modify path
+                flock_vector = self._flocking_control(i)
+                modified_path = [p + 0.1 * flock_vector for p in path]
+                paths.append(modified_path)
+        return paths
