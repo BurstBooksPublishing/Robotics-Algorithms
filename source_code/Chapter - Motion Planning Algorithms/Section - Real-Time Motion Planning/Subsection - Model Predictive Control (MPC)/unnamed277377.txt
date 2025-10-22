@@ -1,0 +1,72 @@
+import org.ejml.simple.SimpleMatrix;
+
+/**
+ * Model Predictive Control (MPC) implementation for real-time motion planning in robotics.
+ * Solves a quadratic programming problem to optimize control inputs over a finite horizon.
+ */
+public class MPCController {
+    private final int horizon;          // Prediction horizon steps
+    private final double dt;            // Time step (seconds)
+    private final SimpleMatrix Q;       // State cost matrix
+    private final SimpleMatrix R;       // Control input cost matrix
+    private final SimpleMatrix A;       // State transition matrix
+    private final SimpleMatrix B;       // Control input matrix
+
+    public MPCController(int horizon, double dt, SimpleMatrix Q, SimpleMatrix R, 
+                         SimpleMatrix A, SimpleMatrix B) {
+        this.horizon = horizon;
+        this.dt = dt;
+        this.Q = Q;
+        this.R = R;
+        this.A = A;
+        this.B = B;
+    }
+
+    /**
+     * Solves MPC problem for current state and reference trajectory
+     * @param x0 Initial state vector
+     * @param xRef Reference trajectory (horizon x state_dim)
+     * @return Optimal control inputs (horizon x control_dim)
+     */
+    public SimpleMatrix solve(SimpleMatrix x0, SimpleMatrix xRef) {
+        int stateDim = x0.numRows();
+        int controlDim = B.numCols();
+
+        // Build prediction matrices
+        SimpleMatrix P = buildPredictionMatrix(x0);
+        SimpleMatrix H = buildHessianMatrix();
+        SimpleMatrix F = buildGradientMatrix(xRef, P);
+
+        // Solve quadratic programming problem: min 0.5*u'*H*u + F'*u
+        // (Using simple solver - replace with QP solver in production)
+        SimpleMatrix optimalU = H.invert().mult(F).scale(-1);
+
+        return optimalU;
+    }
+
+    private SimpleMatrix buildPredictionMatrix(SimpleMatrix x0) {
+        // Implementation of prediction matrix construction
+        // P = [A; A^2; ...; A^horizon] * x0 + [B 0 ...; AB B ...; ...] * U
+        // (Actual implementation would compute this properly)
+        return new SimpleMatrix(horizon, x0.numRows());
+    }
+
+    private SimpleMatrix buildHessianMatrix() {
+        // Build block diagonal matrix with R and B'QB terms
+        // H = blkdiag(R + B'QB, R + B'QB, ..., R)
+        // (Actual implementation would compute this properly)
+        return new SimpleMatrix(horizon, horizon);
+    }
+
+    private SimpleMatrix buildGradientMatrix(SimpleMatrix xRef, SimpleMatrix P) {
+        // Build gradient matrix incorporating reference trajectory
+        // F = (P - xRef)' * Q * B
+        // (Actual implementation would compute this properly)
+        return new SimpleMatrix(horizon, 1);
+    }
+
+    // Helper method for state prediction
+    private SimpleMatrix predictState(SimpleMatrix x, SimpleMatrix u) {
+        return A.mult(x).plus(B.mult(u));
+    }
+}
