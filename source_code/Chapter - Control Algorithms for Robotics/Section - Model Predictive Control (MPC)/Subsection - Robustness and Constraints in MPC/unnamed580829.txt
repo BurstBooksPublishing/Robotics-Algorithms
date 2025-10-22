@@ -1,0 +1,54 @@
+import numpy as np
+import cvxpy as cp
+
+def robust_mpc_controller(x0, A, B, Q, R, P, N, umin, umax, xmin, xmax, W):
+    """
+    Robust MPC controller with state and input constraints.
+    
+    Args:
+        x0: Initial state (nx, 1)
+        A: System matrix (nx, nx)
+        B: Input matrix (nx, nu)
+        Q: State cost matrix (nx, nx)
+        R: Input cost matrix (nu, nu)
+        P: Terminal cost matrix (nx, nx)
+        N: Prediction horizon
+        umin: Minimum input (nu, 1)
+        umax: Maximum input (nu, 1)
+        xmin: Minimum state (nx, 1)
+        xmax: Maximum state (nx, 1)
+        W: Disturbance set (polytope vertices)
+    """
+    nx, nu = B.shape
+    
+    # Define optimization variables
+    x = cp.Variable((nx, N+1))
+    u = cp.Variable((nu, N))
+    
+    # Initialize cost and constraints
+    cost = 0
+    constraints = [x[:,0] == x0.flatten()]  # Initial condition
+    
+    for k in range(N):
+        # Add stage cost
+        cost += cp.quad_form(x[:,k], Q) + cp.quad_form(u[:,k], R)
+        
+        # Add dynamics constraint with worst-case disturbance
+        for w in W:
+            constraints += [x[:,k+1] >= A @ x[:,k] + B @ u[:,k] + w.flatten()]
+            constraints += [x[:,k+1] <= A @ x[:,k] + B @ u[:,k] + w.flatten()]
+        
+        # Add input constraints
+        constraints += [u[:,k] >= umin.flatten(), u[:,k] <= umax.flatten()]
+        
+        # Add state constraints
+        constraints += [x[:,k] >= xmin.flatten(), x[:,k] <= xmax.flatten()]
+    
+    # Add terminal cost
+    cost += cp.quad_form(x[:,N], P)
+    
+    # Solve the optimization problem
+    prob = cp.Problem(cp.Minimize(cost), constraints)
+    prob.solve(solver=cp.ECOS)
+    
+    return u[:,0].value if prob.status == cp.OPTIMAL else None
