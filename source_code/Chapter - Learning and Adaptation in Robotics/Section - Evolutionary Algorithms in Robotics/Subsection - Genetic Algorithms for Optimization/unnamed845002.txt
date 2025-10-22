@@ -1,0 +1,114 @@
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
+
+/**
+ * Genetic Algorithm for optimizing robot path planning in a grid environment.
+ * Demonstrates evolutionary learning for robotics (Chapter 7: Learning and Adaptation).
+ */
+public class RobotPathOptimizer {
+    private static final int POPULATION_SIZE = 100;
+    private static final int MAX_GENERATIONS = 200;
+    private static final double MUTATION_RATE = 0.05;
+    private static final int PATH_LENGTH = 50; // Steps in robot path
+
+    // Individual represents a candidate path solution
+    static class Individual implements Comparable {
+        int[] path; // Sequence of moves (0=up, 1=right, 2=down, 3=left)
+        double fitness;
+
+        Individual(int[] path) {
+            this.path = path;
+            this.fitness = calculateFitness();
+        }
+
+        // Fitness function: higher is better (maximize)
+        private double calculateFitness() {
+            double score = 0;
+            // Simulate path and evaluate (e.g., distance to goal, obstacle avoidance)
+            // Simplified for example - real implementation would use robot simulation
+            for (int move : path) {
+                if (move == 1) score += 1; // Prefer right moves in this example
+            }
+            return score;
+        }
+
+        @Override
+        public int compareTo(Individual other) {
+            return Double.compare(other.fitness, this.fitness); // Descending order
+        }
+    }
+
+    public static void main(String[] args) {
+        List population = initializePopulation();
+        Random rand = new Random();
+
+        for (int gen = 0; gen < MAX_GENERATIONS; gen++) {
+            // Evaluate and sort population
+            Collections.sort(population);
+
+            // Selection and reproduction
+            List newPopulation = new ArrayList<>();
+            for (int i = 0; i < POPULATION_SIZE / 2; i++) {
+                // Tournament selection
+                Individual parent1 = tournamentSelect(population, rand);
+                Individual parent2 = tournamentSelect(population, rand);
+
+                // Crossover (single-point)
+                int[] childPath = crossover(parent1.path, parent2.path, rand);
+                
+                // Mutation
+                mutate(childPath, rand);
+                
+                newPopulation.add(new Individual(childPath));
+            }
+            population = newPopulation;
+        }
+
+        // Get best solution
+        Collections.sort(population);
+        System.out.println("Best fitness: " + population.get(0).fitness);
+    }
+
+    private static List initializePopulation() {
+        List population = new ArrayList<>();
+        Random rand = new Random();
+        for (int i = 0; i < POPULATION_SIZE; i++) {
+            int[] path = new int[PATH_LENGTH];
+            for (int j = 0; j < PATH_LENGTH; j++) {
+                path[j] = rand.nextInt(4); // Random moves
+            }
+            population.add(new Individual(path));
+        }
+        return population;
+    }
+
+    private static Individual tournamentSelect(List population, Random rand) {
+        // Tournament size of 3
+        Individual best = population.get(rand.nextInt(population.size()));
+        for (int i = 0; i < 2; i++) {
+            Individual contender = population.get(rand.nextInt(population.size()));
+            if (contender.fitness > best.fitness) {
+                best = contender;
+            }
+        }
+        return best;
+    }
+
+    private static int[] crossover(int[] parent1, int[] parent2, Random rand) {
+        int[] child = new int[PATH_LENGTH];
+        int crossoverPoint = rand.nextInt(PATH_LENGTH);
+        System.arraycopy(parent1, 0, child, 0, crossoverPoint);
+        System.arraycopy(parent2, crossoverPoint, child, crossoverPoint, PATH_LENGTH - crossoverPoint);
+        return child;
+    }
+
+    private static void mutate(int[] path, Random rand) {
+        for (int i = 0; i < path.length; i++) {
+            if (rand.nextDouble() < MUTATION_RATE) {
+                path[i] = rand.nextInt(4); // Random new move
+            }
+        }
+    }
+}
