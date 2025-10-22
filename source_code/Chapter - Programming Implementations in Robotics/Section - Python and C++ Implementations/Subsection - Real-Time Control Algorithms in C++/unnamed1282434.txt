@@ -1,0 +1,61 @@
+// Real-Time PID Controller Implementation in Java (for Robotics)
+public class PIDController {
+    private double kp, ki, kd;  // PID gains
+    private double setpoint;    // Desired target value
+    private double prevError;   // Previous error for derivative term
+    private double integral;    // Integral term accumulator
+
+    public PIDController(double kp, double ki, double kd, double setpoint) {
+        this.kp = kp;
+        this.ki = ki;
+        this.kd = kd;
+        this.setpoint = setpoint;
+        this.prevError = 0;
+        this.integral = 0;
+    }
+
+    // Compute control output with anti-windup and dt handling
+    public double compute(double currentValue, double dt) {
+        double error = setpoint - currentValue;
+        
+        // Proportional term
+        double proportional = kp * error;
+        
+        // Integral term with anti-windup
+        integral += error * dt;
+        if (Math.abs(integral) > 1000) {  // Anti-windup limit
+            integral = Math.signum(integral) * 1000;
+        }
+        double integralTerm = ki * integral;
+        
+        // Derivative term (filtered)
+        double derivative = (error - prevError) / dt;
+        double derivativeTerm = kd * derivative;
+        prevError = error;
+        
+        return proportional + integralTerm + derivativeTerm;
+    }
+
+    // Real-time update for setpoint (thread-safe)
+    public synchronized void setSetpoint(double setpoint) {
+        this.setpoint = setpoint;
+        this.integral = 0;  // Reset integral on setpoint change
+    }
+}
+
+// Example usage in robotic arm control
+public class RoboticArmControl {
+    private PIDController jointController;
+
+    public RoboticArmControl() {
+        // Initialize PID with tuned parameters (example values)
+        jointController = new PIDController(2.5, 0.01, 0.1, 0);
+    }
+
+    // Real-time control loop (typically runs in separate thread)
+    public void controlLoop(double currentAngle, double dt) {
+        double controlSignal = jointController.compute(currentAngle, dt);
+        // Apply control signal to motor/servo here
+        System.out.println("Control signal: " + controlSignal);
+    }
+}
