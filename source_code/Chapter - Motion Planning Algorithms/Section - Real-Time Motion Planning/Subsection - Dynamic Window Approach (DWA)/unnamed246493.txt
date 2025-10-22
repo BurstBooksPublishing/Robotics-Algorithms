@@ -1,0 +1,106 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+class DynamicWindowApproach:
+    def __init__(self, robot_radius=0.5, max_speed=1.0, max_yaw_rate=np.pi/4, 
+                 max_accel=0.2, max_delta_yaw_rate=np.pi/8, dt=0.1, 
+                 predict_time=3.0, goal_cost_gain=1.0, speed_cost_gain=1.0, 
+                 obstacle_cost_gain=1.0):
+        """Initialize DWA parameters."""
+        self.robot_radius = robot_radius
+        self.max_speed = max_speed
+        self.max_yaw_rate = max_yaw_rate
+        self.max_accel = max_accel
+        self.max_delta_yaw_rate = max_delta_yaw_rate
+        self.dt = dt
+        self.predict_time = predict_time
+        self.goal_cost_gain = goal_cost_gain
+        self.speed_cost_gain = speed_cost_gain
+        self.obstacle_cost_gain = obstacle_cost_gain
+
+    def motion_model(self, x, u):
+        """Simple unicycle motion model."""
+        x[0] += u[0] * np.cos(x[2]) * self.dt  # x position
+        x[1] += u[0] * np.sin(x[2]) * self.dt  # y position
+        x[2] += u[1] * self.dt                 # yaw angle
+        x[3] = u[0]                            # velocity
+        x[4] = u[1]                            # yaw rate
+        return x
+
+    def calc_dynamic_window(self, x):
+        """Calculate dynamic window based on current state."""
+        # Velocity window
+        vs = [x[3] - self.max_accel * self.dt,
+              x[3] + self.max_accel * self.dt,
+              -self.max_speed,
+              self.max_speed]
+        
+        # Yaw rate window
+        ys = [x[4] - self.max_delta_yaw_rate * self.dt,
+              x[4] + self.max_delta_yaw_rate * self.dt,
+              -self.max_yaw_rate,
+              self.max_yaw_rate]
+        
+        return [max(vs[0], vs[2]), min(vs[1], vs[3]), 
+                max(ys[0], ys[2]), min(ys[1], ys[3])]
+
+    def calc_trajectory(self, x_init, v, y):
+        """Predict trajectory given initial state and control inputs."""
+        x = np.array(x_init)
+        traj = np.array(x)
+        for _ in range(int(self.predict_time / self.dt)):
+            x = self.motion_model(x, [v, y])
+            traj = np.vstack((traj, x))
+        return traj
+
+    def calc_obstacle_cost(self, traj, ob):
+        """Calculate obstacle cost based on minimum distance to obstacles."""
+        if len(ob) == 0:
+            return 0.0
+        
+        min_dist = float('inf')
+        for i in range(len(traj)):
+            for obs in ob:
+                dist = np.hypot(traj[i, 0] - obs[0], traj[i, 1] - obs[1])
+                if dist <= self.robot_radius:
+                    return float('inf')  # collision
+                if dist < min_dist:
+                    min_dist = dist
+        
+        return 1.0 / min_dist  # inverse of min distance
+
+    def calc_goal_cost(self, traj, goal):
+        """Calculate goal cost based on distance to goal."""
+        dx = goal[0] - traj[-1, 0]
+        dy = goal[1] - traj[-1, 1]
+        return np.hypot(dx, dy)
+
+    def plan(self, x, goal, ob):
+        """Main DWA planning function."""
+        dw = self.calc_dynamic_window(x)
+        min_cost = float('inf')
+        best_u = [0.0, 0.0]
+        best_traj = np.array([x])
+        
+        # Evaluate all possible trajectories in dynamic window
+        for v in np.linspace(dw[0], dw[1], 10):
+            for y in np.linspace(dw[2], dw[3], 10):
+                traj = self.calc_trajectory(x, v, y)
+                
+                # Calculate costs
+                goal_cost = self.calc_goal_cost(traj, goal)
+                speed_cost = self.max_speed - v
+                ob_cost = self.calc_obstacle_cost(traj, ob)
+                
+                # Total cost
+                total_cost = (self.goal_cost_gain * goal_cost + 
+                             self.speed_cost_gain * speed_cost + 
+                             self.obstacle_cost_gain * ob_cost)
+                
+                # Find minimum cost trajectory
+                if total_cost < min_cost:
+                    min_cost = total_cost
+                    best_u = [v, y]
+                    best_traj = traj
+        
+        return best_u, best_traj
