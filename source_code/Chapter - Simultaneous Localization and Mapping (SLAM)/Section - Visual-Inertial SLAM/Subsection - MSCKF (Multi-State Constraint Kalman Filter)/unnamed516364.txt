@@ -1,0 +1,147 @@
+import numpy as np
+from scipy.linalg import block_diag
+
+class MSCKF:
+    def __init__(self, num_states, num_features):
+        """
+        Initialize MSCKF with given number of states and features.
+        
+        Args:
+            num_states (int): Number of camera states to maintain in the sliding window.
+            num_features (int): Number of features to track.
+        """
+        self.num_states = num_states
+        self.num_features = num_features
+        
+        # State vector: [position, velocity, orientation, feature positions]
+        self.state = np.zeros(9 + 3 * num_features)  # 9 for IMU state (pos, vel, quat)
+        self.covariance = np.eye(9 + 3 * num_features) * 0.1  # Initial covariance
+        
+        # Sliding window of camera states
+        self.camera_states = []
+        
+        # Noise parameters
+        self.imu_noise = {
+            'gyro': 1e-4,
+            'accel': 1e-3,
+            'gyro_bias': 1e-5,
+            'accel_bias': 1e-4
+        }
+        
+    def predict_imu(self, gyro, accel, dt):
+        """
+        Predict state using IMU measurements (propagation step).
+        
+        Args:
+            gyro (np.array): Gyroscope measurement (3x1).
+            accel (np.array): Accelerometer measurement (3x1).
+            dt (float): Time step.
+        """
+        # Extract current state components
+        pos = self.state[0:3]
+        vel = self.state[3:6]
+        quat = self.state[6:9]
+        
+        # Convert quaternion to rotation matrix
+        R = self.quat_to_rot(quat)
+        
+        # Update position and velocity
+        new_pos = pos + vel * dt + 0.5 * (R @ accel) * dt**2
+        new_vel = vel + (R @ accel) * dt
+        
+        # Update orientation using gyro measurements
+        omega = gyro * dt
+        new_quat = self.quat_multiply(quat, self.axis_angle_to_quat(omega))
+        
+        # Update state
+        self.state[0:3] = new_pos
+        self.state[3:6] = new_vel
+        self.state[6:9] = new_quat
+        
+        # Update covariance (simplified)
+        F = self.compute_process_jacobian(R, accel, dt)
+        Q = self.compute_process_noise(dt)
+        self.covariance = F @ self.covariance @ F.T + Q
+        
+    def update_visual(self, features_observed):
+        """
+        Update state using visual measurements (update step).
+        
+        Args:
+            features_observed (dict): Dictionary of feature observations {feature_id: [u, v]}.
+        """
+        # For each observed feature, compute residual and Jacobian
+        residuals = []
+        H = []
+        
+        for fid, obs in features_observed.items():
+            # Get feature position in state vector
+            feature_pos = self.state[9 + 3*fid : 12 + 3*fid]
+            
+            # Project feature to all camera states in sliding window
+            for cam_state in self.camera_states:
+                # Compute expected observation
+                h = self.project_feature(cam_state, feature_pos)
+                
+                # Compute residual
+                residual = np.array(obs) - h[:2]  # Only use u,v coordinates
+                residuals.append(residual)
+                
+                # Compute Jacobian
+                H_fid = self.compute_feature_jacobian(cam_state, feature_pos)
+                H.append(H_fid)
+        
+        # Stack all residuals and Jacobians
+        residuals = np.concatenate(residuals)
+        H = np.vstack(H)
+        
+        # Compute Kalman gain
+        R = np.eye(len(residuals)) * 0.1  # Measurement noise
+        S = H @ self.covariance @ H.T + R
+        K = self.covariance @ H.T @ np.linalg.inv(S)
+        
+        # Update state and covariance
+        self.state += K @ residuals
+        self.covariance = (np.eye(len(self.state)) - K @ H) @ self.covariance
+        
+    def add_camera_state(self, cam_state):
+        """Add a new camera state to the sliding window."""
+        if len(self.camera_states) >= self.num_states:
+            self.camera_states.pop(0)  # Remove oldest state
+        self.camera_states.append(cam_state)
+        
+    # Helper methods
+    def quat_to_rot(self, q):
+        """Convert quaternion to rotation matrix."""
+        # Implementation omitted for brevity
+        pass
+        
+    def quat_multiply(self, q1, q2):
+        """Multiply two quaternions."""
+        # Implementation omitted for brevity
+        pass
+        
+    def axis_angle_to_quat(self, omega):
+        """Convert axis-angle to quaternion."""
+        # Implementation omitted for brevity
+        pass
+        
+    def compute_process_jacobian(self, R, accel, dt):
+        """Compute process model Jacobian."""
+        # Implementation omitted for brevity
+        pass
+        
+    def compute_process_noise(self, dt):
+        """Compute process noise matrix."""
+        # Implementation omitted for brevity
+        pass
+        
+    def project_feature(self, cam_state, feature_pos):
+        """Project 3D feature to camera frame."""
+        # Implementation omitted for brevity
+        pass
+        
+    def compute_feature_jacobian(self, cam_state, feature_pos):
+        """Compute Jacobian of feature projection."""
+        # Implementation omitted for brevity
+        pass
