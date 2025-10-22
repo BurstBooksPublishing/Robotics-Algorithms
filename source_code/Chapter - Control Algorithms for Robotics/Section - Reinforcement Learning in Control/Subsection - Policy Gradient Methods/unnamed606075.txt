@@ -1,0 +1,88 @@
+import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
+import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
+import org.deeplearning4j.nn.conf.layers.DenseLayer;
+import org.deeplearning4j.nn.conf.layers.OutputLayer;
+import org.deeplearning4j.nn.weights.WeightInit;
+import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.learning.config.Adam;
+import org.nd4j.linalg.lossfunctions.LossFunctions;
+
+/**
+ * Policy Gradient Method implementation for robotic control
+ * Uses a neural network to learn optimal actions through rewards
+ */
+public class PolicyGradientRobotControl {
+    private MultiLayerConfiguration policyNetwork;
+    private INDArray weights;
+    private double learningRate = 0.01;
+    private double discountFactor = 0.99;
+
+    public PolicyGradientRobotControl(int stateSize, int actionSize) {
+        // Policy network configuration
+        policyNetwork = new NeuralNetConfiguration.Builder()
+            .seed(123)
+            .weightInit(WeightInit.XAVIER)
+            .updater(new Adam(learningRate))
+            .list()
+            .layer(new DenseLayer.Builder()
+                .nIn(stateSize)
+                .nOut(64)
+                .activation(Activation.RELU)
+                .build())
+            .layer(new DenseLayer.Builder()
+                .nOut(32)
+                .activation(Activation.RELU)
+                .build())
+            .layer(new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
+                .nOut(actionSize)
+                .activation(Activation.SOFTMAX)
+                .build())
+            .build();
+    }
+
+    /**
+     * Selects action based on current policy
+     * @param state Current robot state
+     * @return Selected action probabilities
+     */
+    public INDArray selectAction(INDArray state) {
+        // Forward pass through network
+        INDArray actionProbs = Nd4j.create(policyNetwork.getConf().getIterationCount(), 1);
+        // TODO: Implement forward propagation
+        return actionProbs;
+    }
+
+    /**
+     * Updates policy based on episode rewards
+     * @param states Array of states from episode
+     * @param actions Array of actions taken
+     * @param rewards Array of received rewards
+     */
+    public void updatePolicy(INDArray[] states, INDArray[] actions, double[] rewards) {
+        // Calculate discounted rewards
+        double[] discountedRewards = calculateDiscountedRewards(rewards);
+        
+        // Policy gradient update
+        for (int t = 0; t < states.length; t++) {
+            INDArray grad = computeGradient(states[t], actions[t]);
+            weights.addi(grad.mul(discountedRewards[t]));
+        }
+    }
+
+    private double[] calculateDiscountedRewards(double[] rewards) {
+        double[] discounted = new double[rewards.length];
+        double runningSum = 0;
+        for (int t = rewards.length - 1; t >= 0; t--) {
+            runningSum = runningSum * discountFactor + rewards[t];
+            discounted[t] = runningSum;
+        }
+        return discounted;
+    }
+
+    private INDArray computeGradient(INDArray state, INDArray action) {
+        // TODO: Implement gradient computation
+        return Nd4j.zerosLike(weights);
+    }
+}
