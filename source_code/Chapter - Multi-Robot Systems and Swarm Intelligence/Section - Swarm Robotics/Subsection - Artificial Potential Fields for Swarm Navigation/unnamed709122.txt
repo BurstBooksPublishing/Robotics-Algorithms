@@ -1,0 +1,128 @@
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Artificial Potential Fields for Swarm Navigation in Multi-Robot Systems.
+ * Simulates attractive (goal) and repulsive (obstacle) forces for swarm robots.
+ */
+public class SwarmPotentialField {
+    private static final double ATTRACTIVE_GAIN = 1.0;  // Strength of goal attraction
+    private static final double REPULSIVE_GAIN = 2.5;   // Strength of obstacle repulsion
+    private static final double SAFE_DISTANCE = 2.0;    // Minimum distance to maintain
+
+    // 2D vector class for force calculations
+    static class Vector2D {
+        double x, y;
+
+        Vector2D(double x, double y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        void normalize() {
+            double mag = Math.sqrt(x * x + y * y);
+            if (mag > 0) {
+                x /= mag;
+                y /= mag;
+            }
+        }
+    }
+
+    // Robot class with position and velocity
+    static class Robot {
+        Vector2D position;
+        Vector2D velocity;
+
+        Robot(double x, double y) {
+            this.position = new Vector2D(x, y);
+            this.velocity = new Vector2D(0, 0);
+        }
+    }
+
+    // Calculate attractive force toward goal
+    private static Vector2D calculateAttractiveForce(Vector2D robotPos, Vector2D goalPos) {
+        Vector2D force = new Vector2D(goalPos.x - robotPos.x, goalPos.y - robotPos.y);
+        force.normalize();
+        force.x *= ATTRACTIVE_GAIN;
+        force.y *= ATTRACTIVE_GAIN;
+        return force;
+    }
+
+    // Calculate repulsive force from obstacles/other robots
+    private static Vector2D calculateRepulsiveForce(Robot current, List swarm, List obstacles) {
+        Vector2D totalForce = new Vector2D(0, 0);
+
+        // Avoid other robots
+        for (Robot other : swarm) {
+            if (other != current) {
+                double dx = other.position.x - current.position.x;
+                double dy = other.position.y - current.position.y;
+                double distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < SAFE_DISTANCE) {
+                    Vector2D force = new Vector2D(-dx, -dy);
+                    force.normalize();
+                    double strength = REPULSIVE_GAIN / (distance * distance);
+                    force.x *= strength;
+                    force.y *= strength;
+                    totalForce.x += force.x;
+                    totalForce.y += force.y;
+                }
+            }
+        }
+
+        // Avoid obstacles
+        for (Vector2D obs : obstacles) {
+            double dx = obs.x - current.position.x;
+            double dy = obs.y - current.position.y;
+            double distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < SAFE_DISTANCE) {
+                Vector2D force = new Vector2D(-dx, -dy);
+                force.normalize();
+                double strength = REPULSIVE_GAIN / (distance * distance);
+                force.x *= strength;
+                force.y *= strength;
+                totalForce.x += force.x;
+                totalForce.y += force.y;
+            }
+        }
+
+        return totalForce;
+    }
+
+    // Update robot position based on combined forces
+    public static void updateSwarm(List swarm, Vector2D goal, List obstacles) {
+        for (Robot robot : swarm) {
+            Vector2D attractive = calculateAttractiveForce(robot.position, goal);
+            Vector2D repulsive = calculateRepulsiveForce(robot, swarm, obstacles);
+
+            // Combine forces and update velocity
+            robot.velocity.x = attractive.x + repulsive.x;
+            robot.velocity.y = attractive.y + repulsive.y;
+
+            // Update position (simple Euler integration)
+            robot.position.x += robot.velocity.x * 0.1;
+            robot.position.y += robot.velocity.y * 0.1;
+        }
+    }
+
+    public static void main(String[] args) {
+        // Example usage
+        List swarm = new ArrayList<>();
+        swarm.add(new Robot(0, 0));
+        swarm.add(new Robot(1, 1));
+        swarm.add(new Robot(-1, -1));
+
+        Vector2D goal = new Vector2D(10, 10);
+        List obstacles = new ArrayList<>();
+        obstacles.add(new Vector2D(5, 5));
+        obstacles.add(new Vector2D(7, 3));
+
+        // Simulation loop
+        for (int i = 0; i < 100; i++) {
+            updateSwarm(swarm, goal, obstacles);
+            // Visualization/position logging would go here
+        }
+    }
+}
