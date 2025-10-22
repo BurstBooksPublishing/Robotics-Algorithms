@@ -1,0 +1,64 @@
+import numpy as np
+import scipy.optimize
+from typing import List, Tuple
+
+def bundle_adjustment_slam(
+    poses: List[np.ndarray], 
+    landmarks: List[np.ndarray], 
+    observations: List[Tuple[int, int, np.ndarray]],
+    camera_matrix: np.ndarray
+) -> Tuple[List[np.ndarray], List[np.ndarray]]:
+    """
+    Perform bundle adjustment for SLAM to optimize poses and landmarks.
+    
+    Args:
+        poses: List of initial pose matrices (4x4) in world frame
+        landmarks: List of initial 3D landmark positions
+        observations: List of (pose_idx, landmark_idx, 2D_observation)
+        camera_matrix: 3x3 camera intrinsic matrix
+    
+    Returns:
+        Optimized poses and landmarks
+    """
+    # Flatten all parameters into a single vector for optimization
+    def flatten_params(poses, landmarks):
+        pose_vec = np.concatenate([p[:3, :].flatten() for p in poses])
+        landmark_vec = np.concatenate(landmarks)
+        return np.concatenate([pose_vec, landmark_vec])
+    
+    # Reconstruct poses and landmarks from flattened vector
+    def reconstruct_params(param_vec, num_poses, num_landmarks):
+        pose_params = param_vec[:12*num_poses].reshape(num_poses, 12)
+        poses = [np.vstack([p.reshape(3,4), [0,0,0,1]]) for p in pose_params]
+        landmarks = param_vec[12*num_poses:].reshape(num_landmarks, 3)
+        return poses, landmarks
+    
+    # Project 3D point to 2D image coordinates
+    def project_point(pose, point, K):
+        homo_point = np.append(point, 1)
+        cam_coords = pose[:3,:] @ homo_point
+        proj = K @ cam_coords
+        return proj[:2] / proj[2]
+    
+    # Cost function for optimization
+    def cost_function(param_vec):
+        poses, landmarks = reconstruct_params(param_vec, len(poses), len(landmarks))
+        error = []
+        for pose_idx, land_idx, obs in observations:
+            projected = project_point(poses[pose_idx], landmarks[land_idx], camera_matrix)
+            error.extend((projected - obs).flatten())
+        return np.array(error)
+    
+    # Initial parameter vector
+    initial_params = flatten_params(poses, landmarks)
+    
+    # Run optimization using Levenberg-Marquardt
+    result = scipy.optimize.least_squares(
+        cost_function,
+        initial_params,
+        method='lm',
+        verbose=2
+    )
+    
+    # Return optimized parameters
+    return reconstruct_params(result.x, len(poses), len(landmarks))
