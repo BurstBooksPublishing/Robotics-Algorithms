@@ -1,0 +1,87 @@
+import java.util.*;
+import org.apache.commons.math3.linear.*;
+
+/**
+ * Loop Closure Detection using Bag-of-Words (BoW) and RANSAC for outlier rejection.
+ * Designed for Graph-Based SLAM systems.
+ */
+public class LoopClosureDetector {
+    private Map visualVocabulary; // Pre-trained visual vocabulary
+    private List databaseDescriptors; // Stored map descriptors
+    private double similarityThreshold = 0.75; // Threshold for loop closure candidates
+
+    public LoopClosureDetector(Map vocabulary) {
+        this.visualVocabulary = vocabulary;
+        this.databaseDescriptors = new ArrayList<>();
+    }
+
+    /**
+     * Detects potential loop closures using cosine similarity and geometric verification
+     * @param queryDescriptor Current observation descriptor
+     * @return List of candidate indices or empty list if no closure detected
+     */
+    public List detectLoopClosure(RealVector queryDescriptor) {
+        List candidates = new ArrayList<>();
+        RealVector queryBow = convertToBoW(queryDescriptor);
+
+        // Step 1: Find similar descriptors using cosine similarity
+        for (int i = 0; i < databaseDescriptors.size(); i++) {
+            RealVector dbBow = databaseDescriptors.get(i);
+            double similarity = cosineSimilarity(queryBow, dbBow);
+            
+            if (similarity > similarityThreshold) {
+                candidates.add(i);
+            }
+        }
+
+        // Step 2: Geometric verification using RANSAC
+        if (!candidates.isEmpty()) {
+            candidates = verifyWithRANSAC(queryDescriptor, candidates);
+        }
+
+        return candidates;
+    }
+
+    private RealVector convertToBoW(RealVector descriptor) {
+        // Convert raw descriptor to Bag-of-Words representation
+        RealVector bowVector = new ArrayRealVector(visualVocabulary.size());
+        for (Map.Entry entry : visualVocabulary.entrySet()) {
+            int idx = Integer.parseInt(entry.getKey());
+            bowVector.setEntry(idx, cosineSimilarity(descriptor, entry.getValue()));
+        }
+        return bowVector;
+    }
+
+    private double cosineSimilarity(RealVector v1, RealVector v2) {
+        return v1.dotProduct(v2) / (v1.getNorm() * v2.getNorm());
+    }
+
+    private List verifyWithRANSAC(RealVector query, List candidates) {
+        List verified = new ArrayList<>();
+        // Simplified RANSAC implementation (actual implementation would use feature matching)
+        final int maxIterations = 100;
+        final double inlierThreshold = 0.8;
+
+        for (int idx : candidates) {
+            RealVector candidate = databaseDescriptors.get(idx);
+            int inliers = 0;
+
+            for (int i = 0; i < maxIterations; i++) {
+                // Random sample comparison (simplified)
+                if (Math.abs(query.getEntry(i % query.getDimension()) - 
+                           candidate.getEntry(i % candidate.getDimension())) < 0.1) {
+                    inliers++;
+                }
+            }
+
+            if ((double)inliers / maxIterations > inlierThreshold) {
+                verified.add(idx);
+            }
+        }
+        return verified;
+    }
+
+    public void addDescriptorToDatabase(RealVector descriptor) {
+        databaseDescriptors.add(descriptor);
+    }
+}
