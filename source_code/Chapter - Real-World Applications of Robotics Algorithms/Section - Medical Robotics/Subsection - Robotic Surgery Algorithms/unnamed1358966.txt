@@ -1,0 +1,88 @@
+import numpy as np
+from scipy.spatial import distance
+from typing import Tuple, List
+
+class RoboticSurgeryPlanner:
+    """A class to plan and simulate robotic surgery paths using advanced algorithms."""
+    
+    def __init__(self, obstacle_map: np.ndarray):
+        """
+        Initialize with a 3D obstacle map (1: free space, 0: obstacle).
+        
+        Args:
+            obstacle_map: Binary 3D numpy array representing the surgical environment.
+        """
+        self.obstacle_map = obstacle_map
+        self.dimensions = obstacle_map.shape
+        
+    def compute_shortest_path(self, start: Tuple[int, int, int], goal: Tuple[int, int, int]) -> List[Tuple[int, int, int]]:
+        """
+        Compute the shortest collision-free path using A* algorithm.
+        
+        Args:
+            start: (x, y, z) coordinates of the start position.
+            goal: (x, y, z) coordinates of the target position.
+            
+        Returns:
+            List of (x, y, z) waypoints representing the path.
+        """
+        # Priority queue for A* (cost + heuristic, position, path)
+        open_set = [(0 + self._heuristic(start, goal), start, [start])]
+        visited = set()
+        
+        while open_set:
+            _, current, path = open_set.pop(0)  # Get node with lowest cost
+            
+            if current == goal:
+                return path  # Path found
+            
+            if current in visited:
+                continue
+            visited.add(current)
+            
+            # Generate neighbors (6-connected grid)
+            for dx, dy, dz in [(1,0,0), (-1,0,0), (0,1,0), (0,-1,0), (0,0,1), (0,0,-1)]:
+                neighbor = (current[0] + dx, current[1] + dy, current[2] + dz)
+                
+                # Check bounds and collision
+                if (0 <= neighbor[0] < self.dimensions[0] and 
+                    0 <= neighbor[1] < self.dimensions[1] and 
+                    0 <= neighbor[2] < self.dimensions[2] and 
+                    self.obstacle_map[neighbor] == 1):
+                    
+                    new_cost = len(path) + 1  # Cost is path length so far
+                    heuristic = self._heuristic(neighbor, goal)
+                    open_set.append((new_cost + heuristic, neighbor, path + [neighbor]))
+            
+            # Sort to prioritize lowest cost
+            open_set.sort(key=lambda x: x[0])
+        
+        return []  # No path found
+    
+    def _heuristic(self, a: Tuple[int, int, int], b: Tuple[int, int, int]) -> float:
+        """Euclidean distance heuristic for A*."""
+        return distance.euclidean(a, b)
+    
+    def simulate_surgery(self, path: List[Tuple[int, int, int]], tool_radius: float = 1.0) -> bool:
+        """
+        Simulate surgical tool movement with safety checks.
+        
+        Args:
+            path: Planned path from compute_shortest_path.
+            tool_radius: Safety margin around the tool.
+            
+        Returns:
+            True if path is safe, False if collisions detected.
+        """
+        for point in path:
+            # Check for nearby obstacles (simplified collision check)
+            x, y, z = point
+            for dx in range(-int(tool_radius), int(tool_radius) + 1):
+                for dy in range(-int(tool_radius), int(tool_radius) + 1):
+                    for dz in range(-int(tool_radius), int(tool_radius) + 1):
+                        if (0 <= x+dx < self.dimensions[0] and 
+                            0 <= y+dy < self.dimensions[1] and 
+                            0 <= z+dz < self.dimensions[2]):
+                            if self.obstacle_map[x+dx, y+dy, z+dz] == 0:
+                                return False
+        return True
