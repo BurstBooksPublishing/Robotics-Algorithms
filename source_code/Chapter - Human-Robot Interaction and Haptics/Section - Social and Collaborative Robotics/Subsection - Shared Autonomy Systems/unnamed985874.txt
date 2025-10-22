@@ -1,0 +1,77 @@
+/**
+ * SharedAutonomyController.java
+ * Demonstrates a shared autonomy system for collaborative robotics,
+ * blending human input with autonomous robot decision-making.
+ * Context: Robotics Algorithms - Human-Robot Interaction (Chapter 8)
+ */
+import java.util.concurrent.*;
+
+public class SharedAutonomyController {
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private volatile boolean isHumanIntervening = false;
+    private double autonomyWeight = 0.7;  // Default autonomy influence (70%)
+
+    // Shared autonomy decision pipeline
+    public void executeTask(HumanInput humanInput, RobotAutonomy autonomy) {
+        executor.submit(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                // Blend human and autonomous commands
+                RobotCommand blendedCommand = blendCommands(
+                    humanInput.getCurrentCommand(),
+                    autonomy.generateCommand(),
+                    autonomyWeight
+                );
+
+                executeRobotCommand(blendedCommand);
+
+                // Dynamic autonomy adjustment based on human intervention
+                if (humanInput.isActive()) {
+                    isHumanIntervening = true;
+                    autonomyWeight = Math.max(0.2, autonomyWeight - 0.05);  // Reduce autonomy influence
+                } else {
+                    isHumanIntervening = false;
+                    autonomyWeight = Math.min(0.9, autonomyWeight + 0.02);  // Gradually restore autonomy
+                }
+            }
+        });
+    }
+
+    // Weighted command blending algorithm
+    private RobotCommand blendCommands(RobotCommand humanCmd, 
+                                     RobotCommand autoCmd, 
+                                     double autoWeight) {
+        return new RobotCommand(
+            autoWeight * autoCmd.x + (1 - autoWeight) * humanCmd.x,
+            autoWeight * autoCmd.y + (1 - autoWeight) * humanCmd.y,
+            autoWeight * autoCmd.z + (1 - autoWeight) * humanCmd.z
+        );
+    }
+
+    // Robot command execution (simplified)
+    private void executeRobotCommand(RobotCommand cmd) {
+        // Hardware interface would go here
+        System.out.printf("Executing: (%.2f, %.2f, %.2f)\n", cmd.x, cmd.y, cmd.z);
+    }
+
+    // Shutdown controller
+    public void shutdown() {
+        executor.shutdownNow();
+    }
+
+    // Data structures
+    static class RobotCommand {
+        public final double x, y, z;
+        public RobotCommand(double x, double y, double z) {
+            this.x = x; this.y = y; this.z = z;
+        }
+    }
+
+    interface HumanInput {
+        RobotCommand getCurrentCommand();
+        boolean isActive();
+    }
+
+    interface RobotAutonomy {
+        RobotCommand generateCommand();
+    }
+}
