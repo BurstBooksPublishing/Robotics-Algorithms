@@ -1,0 +1,70 @@
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.distributions import Categorical
+
+class PolicyNetwork(nn.Module):
+    """Policy network for policy gradient methods in robotics control."""
+    def __init__(self, state_dim, action_dim, hidden_dim=64):
+        super(PolicyNetwork, self).__init__()
+        self.fc1 = nn.Linear(state_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, action_dim)
+        self.relu = nn.ReLU()
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, x):
+        """Forward pass to compute action probabilities."""
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.fc2(x))
+        return self.softmax(self.fc3(x))
+
+def train_policy_gradient(env, policy_net, episodes=1000, gamma=0.99, lr=0.01):
+    """Train policy gradient for robotics control tasks."""
+    optimizer = optim.Adam(policy_net.parameters(), lr=lr)
+    
+    for episode in range(episodes):
+        state = env.reset()
+        log_probs = []
+        rewards = []
+        
+        # Collect trajectory
+        while True:
+            state_tensor = torch.FloatTensor(state)
+            action_probs = policy_net(state_tensor)
+            m = Categorical(action_probs)
+            action = m.sample()
+            
+            next_state, reward, done, _ = env.step(action.item())
+            
+            log_probs.append(m.log_prob(action))
+            rewards.append(reward)
+            state = next_state
+            
+            if done:
+                break
+        
+        # Compute discounted returns
+        discounted_returns = []
+        R = 0
+        for r in reversed(rewards):
+            R = r + gamma * R
+            discounted_returns.insert(0, R)
+        
+        # Normalize returns
+        returns = torch.tensor(discounted_returns)
+        returns = (returns - returns.mean()) / (returns.std() + 1e-9)
+        
+        # Compute loss and update policy
+        policy_loss = []
+        for log_prob, R in zip(log_probs, returns):
+            policy_loss.append(-log_prob * R)
+        
+        optimizer.zero_grad()
+        policy_loss = torch.cat(policy_loss).sum()
+        policy_loss.backward()
+        optimizer.step()
+        
+        if episode % 100 == 0:
+            print(f"Episode {episode}, Total Reward: {sum(rewards)}")
