@@ -1,0 +1,101 @@
+import org.ejml.simple.SimpleMatrix;
+
+public class MSCKF {
+    private SimpleMatrix state;          // State vector [position, velocity, orientation, IMU biases]
+    private SimpleMatrix covariance;     // State covariance matrix
+    private SimpleMatrix imuNoise;       // IMU noise parameters
+    private SimpleMatrix camNoise;       // Camera noise parameters
+    private List features; // Tracked visual features
+
+    public MSCKF() {
+        // Initialize state with zeros (15x1: 3 pos, 3 vel, 4 quat, 3 acc bias, 2 gyro bias)
+        state = new SimpleMatrix(15, 1);
+        // Initialize covariance with large diagonal values (uncertainty)
+        covariance = SimpleMatrix.identity(15).scale(1e6);
+        // Initialize noise matrices (process and measurement)
+        imuNoise = new SimpleMatrix(12, 12); // IMU noise (6x6 accel + 6x6 gyro)
+        camNoise = new SimpleMatrix(2, 2);   // Camera pixel noise
+    }
+
+    // IMU propagation step
+    public void propagateIMU(double dt, SimpleMatrix accel, SimpleMatrix gyro) {
+        // Extract current state components
+        SimpleMatrix pos = state.extractVector(0, 3);
+        SimpleMatrix vel = state.extractVector(3, 6);
+        SimpleMatrix quat = state.extractVector(6, 10);
+        
+        // IMU propagation equations (simplified)
+        SimpleMatrix newPos = pos.plus(vel.scale(dt));
+        SimpleMatrix newVel = vel.plus(quatToRot(quat).mult(accel).scale(dt));
+        SimpleMatrix newQuat = integrateQuat(quat, gyro, dt);
+        
+        // Update state
+        state.insertIntoThis(0, 0, newPos);
+        state.insertIntoThis(3, 0, newVel);
+        state.insertIntoThis(6, 0, newQuat);
+        
+        // Update covariance (F: state transition, G: noise Jacobian)
+        SimpleMatrix F = computeStateTransition(dt);
+        SimpleMatrix G = computeNoiseJacobian(dt);
+        covariance = F.mult(covariance.mult(F.transpose())).plus(G.mult(imuNoise.mult(G.transpose())));
+    }
+
+    // Visual update using MSCKF
+    public void visualUpdate(List observations) {
+        // Construct residual and Jacobian for each feature
+        SimpleMatrix H = new SimpleMatrix(0, 15); // Stacked Jacobian
+        SimpleMatrix r = new SimpleMatrix(0, 1);  // Stacked residuals
+        
+        for (FeatureObservation obs : observations) {
+            // Triangulate feature in global frame
+            SimpleMatrix globalPos = triangulateFeature(obs);
+            
+            // Compute residual and Jacobian for this feature
+            Pair res = computeFeatureResidual(obs, globalPos);
+            H = H.combine(0, H.numRows(), res.getFirst());
+            r = r.combine(0, r.numRows(), res.getSecond());
+        }
+        
+        // Perform EKF update
+        SimpleMatrix S = H.mult(covariance.mult(H.transpose())).plus(SimpleMatrix.identity(r.numRows()).scale(camNoise.get(0)));
+        SimpleMatrix K = covariance.mult(H.transpose().mult(S.invert()));
+        state = state.plus(K.mult(r));
+        covariance = SimpleMatrix.identity(15).minus(K.mult(H)).mult(covariance);
+    }
+
+    // Helper: Convert quaternion to rotation matrix
+    private SimpleMatrix quatToRot(SimpleMatrix q) {
+        // Implementation omitted for brevity
+        return new SimpleMatrix(3, 3);
+    }
+    
+    // Helper: Integrate quaternion with angular velocity
+    private SimpleMatrix integrateQuat(SimpleMatrix q, SimpleMatrix w, double dt) {
+        // Implementation omitted for brevity
+        return new SimpleMatrix(4, 1);
+    }
+    
+    // Helper: Triangulate feature position
+    private SimpleMatrix triangulateFeature(FeatureObservation obs) {
+        // Implementation omitted for brevity
+        return new SimpleMatrix(3, 1);
+    }
+    
+    // Helper: Compute feature residual and Jacobian
+    private Pair computeFeatureResidual(FeatureObservation obs, SimpleMatrix globalPos) {
+        // Implementation omitted for brevity
+        return new Pair<>(new SimpleMatrix(2, 15), new SimpleMatrix(2, 1));
+    }
+}
+
+// Supporting classes
+class FeatureTrack {
+    List observations;
+    // Track management methods omitted
+}
+
+class FeatureObservation {
+    int cameraId;
+    SimpleMatrix pixelPos; // 2x1 pixel coordinates
+    double timestamp;
+}
