@@ -1,0 +1,113 @@
+import numpy as np
+import cv2
+import pyquaternion as pq
+from scipy.spatial.transform import Rotation as R
+
+class VINSMono:
+    def __init__(self, cam_params, imu_params):
+        """
+        Initialize VINS-Mono with camera and IMU parameters.
+        
+        Args:
+            cam_params: Dictionary containing camera intrinsics and distortion coefficients.
+            imu_params: Dictionary containing IMU noise parameters (gyro, accel biases).
+        """
+        self.cam_matrix = cam_params['K']  # Camera intrinsic matrix
+        self.dist_coeffs = cam_params['D']  # Distortion coefficients
+        self.gyro_bias = np.zeros(3)       # Gyroscope bias
+        self.accel_bias = np.zeros(3)      # Accelerometer bias
+        self.imu_noise = imu_params        # IMU noise parameters
+        
+        # State variables (position, velocity, orientation, IMU biases)
+        self.state = {
+            'p': np.zeros(3),  # Position in world frame
+            'v': np.zeros(3),  # Velocity in world frame
+            'q': pq.Quaternion(),  # Orientation (world to body)
+            'bg': np.zeros(3),  # Gyro bias
+            'ba': np.zeros(3)   # Accel bias
+        }
+        
+        # Feature tracker for visual measurements
+        self.feature_tracker = cv2.SIFT_create()
+        self.prev_frame = None
+        self.prev_kps = None
+
+    def process_imu(self, gyro, accel, dt):
+        """
+        IMU propagation step (predict state using IMU measurements).
+        
+        Args:
+            gyro: Gyroscope measurement (rad/s)
+            accel: Accelerometer measurement (m/s²)
+            dt: Time step (seconds)
+        """
+        # Remove biases from measurements
+        gyro_unbiased = gyro - self.state['bg']
+        accel_unbiased = accel - self.state['ba']
+        
+        # Update orientation (quaternion integration)
+        delta_q = pq.Quaternion(axis=gyro_unbiased, angle=np.linalg.norm(gyro_unbiased)*dt)
+        self.state['q'] = self.state['q'] * delta_q.normalised
+        
+        # Update position and velocity
+        gravity = np.array([0, 0, -9.81])  # World frame gravity
+        accel_world = self.state['q'].rotate(accel_unbiased) + gravity
+        self.state['v'] += accel_world * dt
+        self.state['p'] += self.state['v'] * dt + 0.5 * accel_world * dt**2
+
+    def process_image(self, image, timestamp):
+        """
+        Visual update step (correct state using visual features).
+        
+        Args:
+            image: Current camera frame
+            timestamp: Image capture time
+        """
+        # Detect and track features
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        kps, descs = self.feature_tracker.detectAndCompute(gray, None)
+        
+        if self.prev_frame is not None:
+            # Match features with previous frame
+            matcher = cv2.BFMatcher(cv2.NORM_L2)
+            matches = matcher.knnMatch(descs, self.prev_desc, k=2)
+            
+            # Apply ratio test for good matches
+            good_matches = []
+            for m, n in matches:
+                if m.distance < 0.75 * n.distance:
+                    good_matches.append(m)
+            
+            # Triangulate matched features and update state
+            self._visual_update(good_matches, kps, self.prev_kps)
+        
+        # Update previous frame data
+        self.prev_frame = gray
+        self.prev_kps = kps
+        self.prev_desc = descs
+
+    def _visual_update(self, matches, curr_kps, prev_kps):
+        """
+        Perform visual-inertial bundle adjustment.
+        
+        Args:
+            matches: List of feature matches
+            curr_kps: Current frame keypoints
+            prev_kps: Previous frame keypoints
+        """
+        # Extract matched points (2D-2D correspondences)
+        pts_curr = np.float32([curr_kps[m.queryIdx].pt for m in matches])
+        pts_prev = np.float32([prev_kps[m.trainIdx].pt for m in matches])
+        
+        # Estimate essential matrix (motion between frames)
+        E, mask = cv2.findEssentialMat(
+            pts_curr, pts_prev, self.cam_matrix, method=cv2.RANSAC, prob=0.999, threshold=1.0
+        )
+        
+        # Recover relative pose from essential matrix
+        _, R_rel, t_rel, _ = cv2.recoverPose(E, pts_curr, pts_prev, self.cam_matrix)
+        
+        # Convert to quaternion and update state
+        q_rel = pq.Quaternion(matrix=R_rel)
+        self.state['q'] = self.state['q'] * q_rel
+        self.state['p'] += self.state['q'].rotate(t_rel.ravel())
