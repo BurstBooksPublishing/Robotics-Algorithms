@@ -1,0 +1,74 @@
+/**
+ * Dynamic Time Warping (DTW) implementation for gesture recognition in robotics.
+ * This class computes the similarity between two gesture sequences.
+ */
+public class DTWGestureRecognizer {
+
+    /**
+     * Computes the DTW distance between two sequences of points (e.g., 2D/3D coordinates).
+     * @param seq1 First sequence of points (e.g., from a reference gesture).
+     * @param seq2 Second sequence of points (e.g., from an input gesture).
+     * @return DTW distance between the sequences (lower = more similar).
+     */
+    public static double computeDTW(double[][] seq1, double[][] seq2) {
+        int n = seq1.length;
+        int m = seq2.length;
+        
+        // Create a cost matrix with padding for DTW calculation
+        double[][] dtwMatrix = new double[n + 1][m + 1];
+        
+        // Initialize the first row and column with infinity (except [0][0])
+        for (int i = 0; i <= n; i++) {
+            for (int j = 0; j <= m; j++) {
+                dtwMatrix[i][j] = Double.POSITIVE_INFINITY;
+            }
+        }
+        dtwMatrix[0][0] = 0;
+        
+        // Fill the DTW matrix
+        for (int i = 1; i <= n; i++) {
+            for (int j = 1; j <= m; j++) {
+                // Euclidean distance between current points
+                double cost = euclideanDistance(seq1[i - 1], seq2[j - 1]);
+                
+                // Find the minimum cumulative cost from adjacent cells
+                double minPrev = Math.min(
+                    Math.min(dtwMatrix[i - 1][j], dtwMatrix[i][j - 1]),
+                    dtwMatrix[i - 1][j - 1]
+                );
+                
+                dtwMatrix[i][j] = cost + minPrev;
+            }
+        }
+        
+        return dtwMatrix[n][m];
+    }
+    
+    /**
+     * Computes Euclidean distance between two points (supports 2D/3D).
+     * @param a First point.
+     * @param b Second point.
+     * @return Euclidean distance between a and b.
+     */
+    private static double euclideanDistance(double[] a, double[] b) {
+        double sum = 0;
+        for (int i = 0; i < a.length; i++) {
+            sum += Math.pow(a[i] - b[i], 2);
+        }
+        return Math.sqrt(sum);
+    }
+
+    /**
+     * Example usage: Compares an input gesture against a reference gesture.
+     */
+    public static void main(String[] args) {
+        // Reference gesture (e.g., a "circle" motion)
+        double[][] referenceGesture = {{0, 0}, {1, 1}, {2, 0}, {1, -1}, {0, 0}};
+        
+        // Input gesture (e.g., from a robot's motion sensor)
+        double[][] inputGesture = {{0.1, 0.2}, {1.1, 0.9}, {2.2, 0.1}, {0.9, -1.1}, {0.1, 0.1}};
+        
+        double dtwDistance = computeDTW(referenceGesture, inputGesture);
+        System.out.println("DTW Distance: " + dtwDistance);
+    }
+}
