@@ -1,0 +1,73 @@
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * A Java implementation of Learning from Demonstration (LfD) 
+ * for social and collaborative robotics.
+ * Models a robot learning tasks from human demonstrations.
+ */
+public class LearningFromDemonstration {
+    private List demonstrations; // Stores recorded trajectories
+    private double[] policy; // Learned policy (e.g., weights for motion primitives)
+
+    public LearningFromDemonstration() {
+        this.demonstrations = new ArrayList<>();
+        this.policy = new double[0];
+    }
+
+    /**
+     * Records a human demonstration (e.g., joint angles or Cartesian trajectory).
+     * @param trajectory Array representing time-series data of the demonstration.
+     */
+    public void recordDemonstration(double[] trajectory) {
+        demonstrations.add(trajectory);
+    }
+
+    /**
+     * Learns a policy from recorded demonstrations using dynamic movement primitives (DMPs).
+     */
+    public void learnPolicy() {
+        if (demonstrations.isEmpty()) {
+            throw new IllegalStateException("No demonstrations recorded.");
+        }
+
+        // Simplified DMP learning: average trajectory as policy (real-world would use Gaussian Mixture Models)
+        int trajectoryLength = demonstrations.get(0).length;
+        policy = new double[trajectoryLength];
+
+        for (double[] demo : demonstrations) {
+            for (int i = 0; i < trajectoryLength; i++) {
+                policy[i] += demo[i] / demonstrations.size(); // Average across demos
+            }
+        }
+    }
+
+    /**
+     * Executes the learned policy (e.g., for robot motion reproduction).
+     * @return The generated trajectory based on learned policy.
+     */
+    public double[] executePolicy() {
+        if (policy.length == 0) {
+            throw new IllegalStateException("Policy not learned yet.");
+        }
+        return policy.clone(); // In practice, would add temporal scaling and perturbation
+    }
+
+    // Example usage for social robotics scenario
+    public static void main(String[] args) {
+        LearningFromDemonstration lfd = new LearningFromDemonstration();
+        
+        // Simulate recording 3 human demonstrations (e.g., via kinesthetic teaching)
+        lfd.recordDemonstration(new double[]{0.1, 0.2, 0.3, 0.4});
+        lfd.recordDemonstration(new double[]{0.2, 0.3, 0.4, 0.5});
+        lfd.recordDemonstration(new double[]{0.15, 0.25, 0.35, 0.45});
+
+        lfd.learnPolicy(); // Learn from demonstrations
+        double[] robotTrajectory = lfd.executePolicy(); // Execute learned policy
+        
+        System.out.println("Learned trajectory:");
+        for (double value : robotTrajectory) {
+            System.out.printf("%.2f ", value);
+        }
+    }
+}
