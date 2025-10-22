@@ -1,0 +1,79 @@
+/**
+ * PID Controller implementation for robotics control systems.
+ * This class provides a basic PID control algorithm with anti-windup.
+ */
+public class PIDController {
+    private double kP, kI, kD;  // PID gains
+    private double setpoint;    // Desired target value
+    private double integral;    // Integral term accumulator
+    private double prevError;   // Previous error for derivative term
+    private double outputMin, outputMax;  // Output clamping bounds
+    private double integralMin, integralMax;  // Anti-windup bounds
+
+    /**
+     * Initialize PID controller with specified gains and limits.
+     * @param kP Proportional gain
+     * @param kI Integral gain
+     * @param kD Derivative gain
+     * @param outputMin Minimum output limit
+     * @param outputMax Maximum output limit
+     */
+    public PIDController(double kP, double kI, double kD, double outputMin, double outputMax) {
+        this.kP = kP;
+        this.kI = kI;
+        this.kD = kD;
+        this.outputMin = outputMin;
+        this.outputMax = outputMax;
+        this.integralMin = outputMin * 0.8;  // Conservative anti-windup bounds
+        this.integralMax = outputMax * 0.8;
+        reset();
+    }
+
+    /**
+     * Reset controller state (integral and previous error).
+     */
+    public void reset() {
+        integral = 0;
+        prevError = 0;
+    }
+
+    /**
+     * Compute PID output for the given process variable.
+     * @param pv Current process variable (sensor reading)
+     * @param dt Time delta since last computation (seconds)
+     * @return PID output (control signal)
+     */
+    public double compute(double pv, double dt) {
+        double error = setpoint - pv;
+        
+        // Proportional term
+        double proportional = kP * error;
+        
+        // Integral term with anti-windup
+        integral += error * dt;
+        integral = Math.max(integralMin, Math.min(integralMax, integral));
+        double integralTerm = kI * integral;
+        
+        // Derivative term (filtered to reduce noise sensitivity)
+        double derivative = dt > 0 ? (error - prevError) / dt : 0;
+        double derivativeTerm = kD * derivative;
+        prevError = error;
+        
+        // Compute and clamp final output
+        double output = proportional + integralTerm + derivativeTerm;
+        return Math.max(outputMin, Math.min(outputMax, output));
+    }
+
+    /**
+     * Set the target setpoint for the controller.
+     * @param setpoint Desired target value
+     */
+    public void setSetpoint(double setpoint) {
+        this.setpoint = setpoint;
+    }
+
+    // Getters for PID gains (useful for adaptive tuning)
+    public double getKP() { return kP; }
+    public double getKI() { return kI; }
+    public double getKD() { return kD; }
+}
