@@ -1,0 +1,77 @@
+import numpy as np
+import rospy
+from geometry_msgs.msg import PoseStamped, Twist
+from sensor_msgs.msg import LaserScan, Imu
+from nav_msgs.msg import Odometry
+
+class AUVController:
+    """AUV controller for deep-sea exploration using robotics algorithms."""
+    
+    def __init__(self):
+        rospy.init_node('auv_controller', anonymous=True)
+        
+        # Subscribers for sensor data
+        self.depth_sub = rospy.Subscriber('/pressure_sensor', Imu, self.depth_callback)
+        self.sonar_sub = rospy.Subscriber('/sonar_scan', LaserScan, self.sonar_callback)
+        self.odom_sub = rospy.Subscriber('/odometry', Odometry, self.odom_callback)
+        
+        # Publisher for control commands
+        self.cmd_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        
+        # PID gains for depth control
+        self.Kp = 0.5
+        self.Ki = 0.01
+        self.Kd = 0.1
+        
+        # Exploration parameters
+        self.target_depth = -1000  # meters (negative for underwater)
+        self.sonar_range = 50.0   # meters
+        self.current_depth = 0.0
+        self.obstacle_detected = False
+        
+    def depth_callback(self, data):
+        """Callback for depth sensor data."""
+        self.current_depth = data.linear_acceleration.z  # Simulated depth reading
+        
+    def sonar_callback(self, data):
+        """Callback for sonar obstacle detection."""
+        min_range = min(data.ranges)
+        self.obstacle_detected = min_range < self.sonar_range * 0.2
+        
+    def odom_callback(self, data):
+        """Callback for localization data."""
+        self.current_pose = data.pose.pose
+        
+    def pid_depth_control(self):
+        """PID controller for maintaining target depth."""
+        error = self.target_depth - self.current_depth
+        integral = np.clip(error * 0.1, -1, 1)  # Simple integral term
+        derivative = error - self.last_error if hasattr(self, 'last_error') else 0
+        self.last_error = error
+        
+        # Calculate control output
+        control = self.Kp * error + self.Ki * integral + self.Kd * derivative
+        
+        # Create and publish control command
+        cmd = Twist()
+        cmd.linear.z = np.clip(control, -0.5, 0.5)  # Limit thrust output
+        self.cmd_pub.publish(cmd)
+        
+    def obstacle_avoidance(self):
+        """Simple obstacle avoidance using potential fields."""
+        if self.obstacle_detected:
+            cmd = Twist()
+            cmd.angular.z = 0.5  # Turn right if obstacle detected
+            self.cmd_pub.publish(cmd)
+            
+    def explore(self):
+        """Main exploration loop."""
+        rate = rospy.Rate(10)  # 10Hz control loop
+        while not rospy.is_shutdown():
+            self.pid_depth_control()
+            self.obstacle_avoidance()
+            rate.sleep()
+
+if __name__ == '__main__':
+    auv = AUVController()
+    auv.explore()
