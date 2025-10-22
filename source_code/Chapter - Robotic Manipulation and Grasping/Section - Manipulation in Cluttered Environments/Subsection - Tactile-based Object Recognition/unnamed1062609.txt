@@ -1,0 +1,84 @@
+import java.util.*;
+import org.apache.commons.math3.geometry.euclidean.threed.Vector3D;
+
+/**
+ * Tactile-based object recognition for robotic manipulation in cluttered environments.
+ * Simulates processing tactile sensor data to identify objects during grasping.
+ */
+public class TactileObjectRecognizer {
+    private List contactPoints;  // Stores 3D contact points from tactile sensors
+    private Map objectDatabase;  // Pre-trained object features (e.g., curvature, stiffness)
+
+    public TactileObjectRecognizer() {
+        contactPoints = new ArrayList<>();
+        objectDatabase = new HashMap<>();
+        initializeObjectDatabase();
+    }
+
+    // Simulates tactile sensor data acquisition during grasping
+    public void addContactPoint(Vector3D point) {
+        contactPoints.add(point);
+    }
+
+    // Extracts geometric features from contact points
+    private double[] extractFeatures() {
+        if (contactPoints.isEmpty()) return null;
+
+        // Calculate average curvature (simplified)
+        double curvature = contactPoints.stream()
+            .mapToDouble(p -> p.distance(calculateCentroid()))
+            .average().orElse(0.0);
+
+        // Calculate contact area (approximation)
+        double area = calculateConvexHullArea();
+
+        return new double[]{curvature, area};
+    }
+
+    // Identifies object by comparing with database
+    public String recognizeObject() {
+        double[] currentFeatures = extractFeatures();
+        if (currentFeatures == null) return "Unknown";
+
+        String bestMatch = "Unknown";
+        double minDistance = Double.MAX_VALUE;
+
+        // Simple nearest-neighbor classification
+        for (Map.Entry entry : objectDatabase.entrySet()) {
+            double dist = featureDistance(currentFeatures, entry.getValue());
+            if (dist < minDistance) {
+                minDistance = dist;
+                bestMatch = entry.getKey();
+            }
+        }
+
+        return (minDistance < 0.5) ? bestMatch : "Unknown";  // Threshold for recognition
+    }
+
+    // Helper methods
+    private Vector3D calculateCentroid() {
+        return new Vector3D(
+            contactPoints.stream().mapToDouble(Vector3D::getX).average().orElse(0),
+            contactPoints.stream().mapToDouble(Vector3D::getY).average().orElse(0),
+            contactPoints.stream().mapToDouble(Vector3D::getZ).average().orElse(0)
+        );
+    }
+
+    private double calculateConvexHullArea() {
+        // Simplified convex hull area calculation (2D projection)
+        if (contactPoints.size() < 3) return 0;
+        // Implementation would use proper convex hull algorithm in real system
+        return contactPoints.size() * 0.1;  // Placeholder
+    }
+
+    private double featureDistance(double[] f1, double[] f2) {
+        return Math.sqrt(Math.pow(f1[0]-f2[0], 2) + Math.pow(f1[1]-f2[1], 2));
+    }
+
+    private void initializeObjectDatabase() {
+        // Sample pre-trained object features (curvature, area)
+        objectDatabase.put("Cube", new double[]{0.0, 0.04});
+        objectDatabase.put("Sphere", new double[]{0.5, 0.03});
+        objectDatabase.put("Cylinder", new double[]{0.3, 0.05});
+    }
+}
