@@ -1,0 +1,61 @@
+/**
+ * Class to compute grasp quality metrics for robotic manipulation.
+ * Implements metrics from Chapter 9: Robotic Manipulation and Grasping.
+ */
+public class GraspQualityMetrics {
+    private static final double MIN_FORCE_THRESHOLD = 0.1; // Minimum contact force threshold
+
+    /**
+     * Computes the epsilon quality metric for a given grasp configuration.
+     * @param contactForces Array of contact forces at each grasp point
+     * @param frictionCoefficient Friction coefficient at contact points
+     * @return epsilon quality measure (higher is better)
+     */
+    public static double computeEpsilonQuality(double[] contactForces, double frictionCoefficient) {
+        double minForce = Double.MAX_VALUE;
+        double maxForce = Double.MIN_VALUE;
+        
+        // Find min and max contact forces
+        for (double force : contactForces) {
+            if (force < MIN_FORCE_THRESHOLD) return 0.0; // Invalid grasp
+            minForce = Math.min(minForce, force);
+            maxForce = Math.max(maxForce, force);
+        }
+        
+        // Epsilon quality is ratio of min to max force, scaled by friction
+        return (minForce / maxForce) * frictionCoefficient;
+    }
+
+    /**
+     * Computes the grasp isotropy index (GII) metric.
+     * @param graspMatrix The grasp matrix G (6xn) for n contact points
+     * @return GII value (closer to 1 indicates better isotropy)
+     */
+    public static double computeGraspIsotropyIndex(double[][] graspMatrix) {
+        // Compute singular value decomposition
+        Matrix G = new Matrix(graspMatrix);
+        SingularValueDecomposition svd = G.svd();
+        double[] singularValues = svd.getSingularValues();
+        
+        // Find min and max singular values
+        double minSV = singularValues[0];
+        double maxSV = singularValues[0];
+        for (double sv : singularValues) {
+            minSV = Math.min(minSV, sv);
+            maxSV = Math.max(maxSV, sv);
+        }
+        
+        return minSV / maxSV; // Isotropy index
+    }
+
+    /**
+     * Computes the force closure test using the grasp matrix.
+     * @param graspMatrix The grasp matrix G (6xn)
+     * @return true if force closure is achieved
+     */
+    public static boolean isForceClosure(double[][] graspMatrix) {
+        Matrix G = new Matrix(graspMatrix);
+        // Check if origin is in convex hull of primitive contact wrenches
+        return G.rank() == 6; // Simplified condition for illustration
+    }
+}
