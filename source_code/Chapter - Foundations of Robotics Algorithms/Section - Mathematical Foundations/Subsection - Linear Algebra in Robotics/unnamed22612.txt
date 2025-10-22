@@ -1,0 +1,104 @@
+/**
+ * This class demonstrates the application of linear algebra in robotics,
+ * specifically for transforming robot arm joint angles to end-effector positions
+ * using homogeneous transformation matrices (HTMs).
+ * 
+ * Context: Robotics Algorithms - Chapter 1: Foundations of Robotics Algorithms
+ * Section: Mathematical Foundations
+ */
+public class RobotKinematics {
+    /**
+     * Computes the 4x4 homogeneous transformation matrix (HTM) for a given
+     * joint angle (theta), link length (a), link offset (d), and twist angle (alpha).
+     * Based on Denavit-Hartenberg (DH) parameters.
+     */
+    public static double[][] computeDHMatrix(double theta, double a, double d, double alpha) {
+        double[][] htm = new double[4][4];
+        
+        // Rotation and translation around Z-axis
+        htm[0][0] = Math.cos(theta);
+        htm[0][1] = -Math.sin(theta) * Math.cos(alpha);
+        htm[0][2] = Math.sin(theta) * Math.sin(alpha);
+        htm[0][3] = a * Math.cos(theta);
+        
+        htm[1][0] = Math.sin(theta);
+        htm[1][1] = Math.cos(theta) * Math.cos(alpha);
+        htm[1][2] = -Math.cos(theta) * Math.sin(alpha);
+        htm[1][3] = a * Math.sin(theta);
+        
+        // Rotation and translation around X-axis
+        htm[2][1] = Math.sin(alpha);
+        htm[2][2] = Math.cos(alpha);
+        htm[2][3] = d;
+        
+        htm[3][3] = 1.0;  // Bottom-right element of HTM
+        
+        return htm;
+    }
+    
+    /**
+     * Multiplies two 4x4 homogeneous transformation matrices (HTMs).
+     * Used for forward kinematics chain calculations.
+     */
+    public static double[][] multiplyHTMs(double[][] htm1, double[][] htm2) {
+        double[][] result = new double[4][4];
+        
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                for (int k = 0; k < 4; k++) {
+                    result[i][j] += htm1[i][k] * htm2[k][j];
+                }
+            }
+        }
+        return result;
+    }
+    
+    /**
+     * Computes the end-effector position for a 3-DOF robotic arm
+     * using forward kinematics with DH parameters.
+     */
+    public static double[] computeEndEffectorPosition(double[] jointAngles) {
+        // DH parameters for each joint (a, d, alpha)
+        double[][] dhParams = {
+            {0.5, 0.1, Math.PI/2},  // Joint 1
+            {0.7, 0, 0},             // Joint 2
+            {0.3, 0, 0}              // Joint 3
+        };
+        
+        // Initialize identity matrix
+        double[][] finalHTM = {
+            {1, 0, 0, 0},
+            {0, 1, 0, 0},
+            {0, 0, 1, 0},
+            {0, 0, 0, 1}
+        };
+        
+        // Multiply HTMs for each joint
+        for (int i = 0; i < jointAngles.length; i++) {
+            double[][] htm = computeDHMatrix(
+                jointAngles[i], 
+                dhParams[i][0], 
+                dhParams[i][1], 
+                dhParams[i][2]
+            );
+            finalHTM = multiplyHTMs(finalHTM, htm);
+        }
+        
+        // Extract position from final HTM
+        return new double[] {
+            finalHTM[0][3],  // x-coordinate
+            finalHTM[1][3],  // y-coordinate
+            finalHTM[2][3]   // z-coordinate
+        };
+    }
+    
+    public static void main(String[] args) {
+        // Example usage: compute end-effector position for given joint angles
+        double[] jointAngles = {Math.PI/4, Math.PI/6, Math.PI/8};
+        double[] endEffectorPos = computeEndEffectorPosition(jointAngles);
+        
+        System.out.println("End-effector position (x, y, z): ");
+        System.out.printf("%.3f, %.3f, %.3f%n", 
+            endEffectorPos[0], endEffectorPos[1], endEffectorPos[2]);
+    }
+}
