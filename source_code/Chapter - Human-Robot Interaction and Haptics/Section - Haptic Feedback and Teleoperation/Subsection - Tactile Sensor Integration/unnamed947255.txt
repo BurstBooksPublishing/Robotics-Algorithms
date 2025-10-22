@@ -1,0 +1,60 @@
+import numpy as np
+import rospy
+from std_msgs.msg import Float32MultiArray
+from sensor_msgs.msg import JointState
+
+class TactileSensorIntegrator:
+    """Integrates tactile sensor data for haptic feedback in teleoperation."""
+    
+    def __init__(self, sensor_count=16):
+        # Initialize ROS node
+        rospy.init_node('tactile_sensor_integrator', anonymous=True)
+        
+        # Tactile sensor parameters
+        self.sensor_count = sensor_count
+        self.sensor_data = np.zeros(sensor_count)
+        self.thresholds = np.full(sensor_count, 0.5)  # Default pressure thresholds
+        
+        # ROS publishers/subscribers
+        self.pub = rospy.Publisher('/haptic_feedback', Float32MultiArray, queue_size=10)
+        rospy.Subscriber('/tactile_sensors', Float32MultiArray, self.sensor_callback)
+        rospy.Subscriber('/joint_states', JointState, self.joint_state_callback)
+        
+    def sensor_callback(self, msg):
+        """Process raw tactile sensor data and apply thresholds."""
+        self.sensor_data = np.clip(np.array(msg.data), 0, 1)  # Normalize to [0,1]
+        
+        # Apply dynamic thresholding based on recent data
+        self.thresholds = 0.7 * np.mean(self.sensor_data) + 0.3 * self.thresholds
+        
+    def joint_state_callback(self, msg):
+        """Map tactile data to joint positions for force feedback."""
+        if len(msg.position) != self.sensor_count:
+            rospy.logwarn("Joint count doesn't match sensor count!")
+            return
+            
+        # Calculate feedback forces (simple proportional control)
+        feedback_forces = []
+        for i, pos in enumerate(msg.position):
+            # Scale force by how much threshold is exceeded
+            excess_pressure = max(0, self.sensor_data[i] - self.thresholds[i])
+            feedback_forces.append(excess_pressure * 10.0)  # 10.0 N max force
+            
+        # Publish haptic feedback
+        feedback_msg = Float32MultiArray(data=feedback_forces)
+        self.pub.publish(feedback_msg)
+        
+    def run(self):
+        """Main loop with safety checks."""
+        rate = rospy.Rate(100)  # 100Hz update rate
+        while not rospy.is_shutdown():
+            # Implement safety checks here
+            if np.any(self.sensor_data > 1.5):  # Emergency stop condition
+                rospy.logerr("Dangerous pressure detected!")
+                self.pub.publish(Float32MultiArray(data=np.zeros(self.sensor_count)))
+                break
+            rate.sleep()
+
+if __name__ == "__main__":
+    integrator = TactileSensorIntegrator()
+    integrator.run()
