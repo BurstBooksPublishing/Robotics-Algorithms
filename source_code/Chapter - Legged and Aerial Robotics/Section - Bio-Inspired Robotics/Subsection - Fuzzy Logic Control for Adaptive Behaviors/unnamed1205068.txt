@@ -1,0 +1,63 @@
+// Fuzzy Logic Controller for Bio-Inspired Legged Robotics
+// Implements adaptive gait control based on terrain roughness
+
+import net.sourceforge.jFuzzyLogic.FIS;
+import net.sourceforge.jFuzzyLogic.rule.Variable;
+
+public class FuzzyGaitController {
+    private FIS fis;  // Fuzzy Inference System
+
+    public FuzzyGaitController(String fclFile) {
+        // Load FCL (Fuzzy Control Language) file
+        fis = FIS.load(fclFile, true);
+        if (fis == null) {
+            throw new RuntimeException("Can't load FCL file");
+        }
+    }
+
+    public GaitParameters computeGait(double terrainRoughness, double energyLevel) {
+        // Set input variables
+        fis.setVariable("terrain_roughness", terrainRoughness);
+        fis.setVariable("energy_level", energyLevel);
+
+        // Evaluate fuzzy rules
+        fis.evaluate();
+
+        // Get output variables
+        Variable stepLength = fis.getVariable("step_length");
+        Variable stanceDuration = fis.getVariable("stance_duration");
+        Variable bodyHeight = fis.getVariable("body_height");
+
+        return new GaitParameters(
+            stepLength.getValue(),
+            stanceDuration.getValue(),
+            bodyHeight.getValue()
+        );
+    }
+
+    // Inner class to hold gait parameters
+    public static class GaitParameters {
+        public final double stepLength;
+        public final double stanceDuration;
+        public final double bodyHeight;
+
+        public GaitParameters(double sl, double sd, double bh) {
+            this.stepLength = sl;
+            this.stanceDuration = sd;
+            this.bodyHeight = bh;
+        }
+    }
+
+    // Example usage
+    public static void main(String[] args) {
+        FuzzyGaitController controller = new FuzzyGaitController("gait_control.fcl");
+        
+        // Simulate sensor inputs
+        double roughness = 0.7;  // 0-1 scale
+        double energy = 0.4;     // 0-1 scale
+        
+        GaitParameters params = controller.computeGait(roughness, energy);
+        System.out.printf("Adapted Gait: Step=%.2f, Stance=%.2f, Height=%.2f%n",
+            params.stepLength, params.stanceDuration, params.bodyHeight);
+    }
+}
