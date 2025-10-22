@@ -1,0 +1,62 @@
+import org.ejml.simple.SimpleMatrix;
+import java.util.ArrayList;
+
+/**
+ * Linear and Nonlinear MPC implementation for robotic control.
+ * Assumes a robot with state x and control input u.
+ */
+public class RobotMPC {
+    private int horizon;          // Prediction horizon
+    private double dt;            // Time step
+    private SimpleMatrix Q, R;    // Cost matrices (state and control)
+
+    // Constructor for MPC setup
+    public RobotMPC(int horizon, double dt, SimpleMatrix Q, SimpleMatrix R) {
+        this.horizon = horizon;
+        this.dt = dt;
+        this.Q = Q;
+        this.R = R;
+    }
+
+    /**
+     * Linear MPC solver using quadratic programming.
+     * @param x0 Initial state
+     * @param x_ref Reference trajectory
+     * @return Optimal control sequence
+     */
+    public ArrayList solveLinearMPC(SimpleMatrix x0, SimpleMatrix[] x_ref) {
+        ArrayList u_opt = new ArrayList<>();
+        SimpleMatrix A = buildStateMatrix();  // Linear state matrix
+        SimpleMatrix B = buildControlMatrix();// Linear control matrix
+
+        // QP solver setup (e.g., using EJML or external solver)
+        // ... (solver implementation here)
+
+        return u_opt;  // Returns optimal control sequence
+    }
+
+    /**
+     * Nonlinear MPC solver using iterative optimization.
+     * @param x0 Initial state
+     * @param x_ref Reference trajectory
+     * @return Optimal control sequence
+     */
+    public ArrayList solveNonlinearMPC(SimpleMatrix x0, SimpleMatrix[] x_ref) {
+        ArrayList u_opt = new ArrayList<>();
+        // Nonlinear dynamics (e.g., using CasADi or custom implementation)
+        // ... (solver implementation here)
+
+        return u_opt;  // Returns optimal control sequence
+    }
+
+    // Helper methods for matrix construction
+    private SimpleMatrix buildStateMatrix() {
+        // ... (implementation for linear state matrix)
+        return new SimpleMatrix(6, 6);  // Placeholder
+    }
+
+    private SimpleMatrix buildControlMatrix() {
+        // ... (implementation for linear control matrix)
+        return new SimpleMatrix(6, 3);  // Placeholder
+    }
+}
