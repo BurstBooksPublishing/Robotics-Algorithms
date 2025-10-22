@@ -1,0 +1,128 @@
+// Extended Kalman Filter (EKF) implementation for Robotics Sensor Fusion
+public class ExtendedKalmanFilter {
+    private Matrix stateEstimate;  // Current state estimate [x, y, theta]
+    private Matrix covariance;     // Estimation uncertainty covariance
+    private Matrix processNoise;   // Process noise covariance (Q)
+    private Matrix measurementNoise; // Measurement noise covariance (R)
+
+    public ExtendedKalmanFilter(Matrix initialState, Matrix initialCovariance) {
+        this.stateEstimate = initialState;
+        this.covariance = initialCovariance;
+    }
+
+    // Prediction step using nonlinear motion model
+    public void predict(Matrix controlInput, double deltaTime) {
+        // Nonlinear state transition function (f)
+        Matrix predictedState = nonlinearStateTransition(stateEstimate, controlInput, deltaTime);
+        
+        // Linearized state transition Jacobian (F)
+        Matrix F = computeJacobianF(stateEstimate, controlInput, deltaTime);
+        
+        // Predict covariance: P = F * P * F^T + Q
+        covariance = F.multiply(covariance).multiply(F.transpose()).add(processNoise);
+        stateEstimate = predictedState;
+    }
+
+    // Update step with nonlinear measurement model
+    public void update(Matrix measurement) {
+        // Nonlinear measurement function (h)
+        Matrix predictedMeasurement = nonlinearMeasurementModel(stateEstimate);
+        
+        // Linearized measurement Jacobian (H)
+        Matrix H = computeJacobianH(stateEstimate);
+        
+        // Innovation covariance: S = H * P * H^T + R
+        Matrix S = H.multiply(covariance).multiply(H.transpose()).add(measurementNoise);
+        
+        // Kalman gain: K = P * H^T * S^-1
+        Matrix K = covariance.multiply(H.transpose()).multiply(S.inverse());
+        
+        // Update state estimate: x = x + K * (z - h(x))
+        stateEstimate = stateEstimate.add(K.multiply(measurement.subtract(predictedMeasurement)));
+        
+        // Update covariance: P = (I - K * H) * P
+        Matrix I = Matrix.identity(covariance.getRowDimension());
+        covariance = I.subtract(K.multiply(H)).multiply(covariance);
+    }
+
+    // Helper methods for nonlinear models and Jacobians would be implemented here
+    // ...
+}
+
+// Unscented Kalman Filter (UKF) implementation
+public class UnscentedKalmanFilter {
+    private Matrix state;          // State vector [x, y, theta, ...]
+    private Matrix covariance;     // State covariance
+    private double alpha = 1e-3;   // UKF tuning parameters
+    private double beta = 2.0;
+    private double kappa = 0.0;
+    private int n;                 // State dimension
+
+    public UnscentedKalmanFilter(Matrix initialState, Matrix initialCovariance) {
+        this.state = initialState;
+        this.covariance = initialCovariance;
+        this.n = initialState.getRowDimension();
+    }
+
+    // Generate sigma points for UKF
+    private Matrix[] generateSigmaPoints() {
+        double lambda = alpha * alpha * (n + kappa) - n;
+        Matrix sqrtP = covariance.choleskyDecomposition();
+        
+        // Create 2n+1 sigma points
+        Matrix[] sigmaPoints = new Matrix[2 * n + 1];
+        sigmaPoints[0] = state;
+        
+        // Spread points around mean
+        for (int i = 0; i < n; i++) {
+            Matrix deviation = sqrtP.getColumn(i).multiply(Math.sqrt(n + lambda));
+            sigmaPoints[i + 1] = state.add(deviation);
+            sigmaPoints[n + i + 1] = state.subtract(deviation);
+        }
+        return sigmaPoints;
+    }
+
+    // UKF prediction step
+    public void predict(Matrix controlInput, double dt) {
+        Matrix[] sigmaPoints = generateSigmaPoints();
+        Matrix[] transformedPoints = new Matrix[sigmaPoints.length];
+        
+        // Transform each sigma point through process model
+        for (int i = 0; i < sigmaPoints.length; i++) {
+            transformedPoints[i] = processModel(sigmaPoints[i], controlInput, dt);
+        }
+        
+        // Compute new mean and covariance
+        state = computeWeightedMean(transformedPoints);
+        covariance = computeWeightedCovariance(transformedPoints, state);
+        
+        // Add process noise
+        covariance = covariance.add(processNoise);
+    }
+
+    // UKF update step
+    public void update(Matrix measurement) {
+        Matrix[] sigmaPoints = generateSigmaPoints();
+        Matrix[] measurementPoints = new Matrix[sigmaPoints.length];
+        
+        // Transform sigma points to measurement space
+        for (int i = 0; i < sigmaPoints.length; i++) {
+            measurementPoints[i] = measurementModel(sigmaPoints[i]);
+        }
+        
+        // Compute predicted measurement mean
+        Matrix zMean = computeWeightedMean(measurementPoints);
+        
+        // Compute innovation covariance and cross-covariance
+        Matrix Pzz = computeWeightedCovariance(measurementPoints, zMean).add(measurementNoise);
+        Matrix Pxz = computeCrossCovariance(sigmaPoints, state, measurementPoints, zMean);
+        
+        // Compute Kalman gain and update state
+        Matrix K = Pxz.multiply(Pzz.inverse());
+        state = state.add(K.multiply(measurement.subtract(zMean)));
+        covariance = covariance.subtract(K.multiply(Pzz).multiply(K.transpose()));
+    }
+    
+    // Helper methods for UKF weights and computations would be implemented here
+    // ...
+}
