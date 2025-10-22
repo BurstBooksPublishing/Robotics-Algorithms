@@ -1,0 +1,60 @@
+import numpy as np
+from scipy.optimize import minimize
+from typing import List, Tuple
+
+def contact_based_grasp_optimization(
+    object_mesh: np.ndarray,
+    initial_contacts: List[Tuple[float, float, float]],
+    friction_coeff: float = 0.5,
+    max_iter: int = 100
+) -> Tuple[List[Tuple[float, float, float]], float]:
+    """
+    Optimize grasp contacts on an object mesh to maximize stability.
+    
+    Args:
+        object_mesh: 3D array representing object vertices.
+        initial_contacts: List of (x,y,z) initial contact points.
+        friction_coeff: Coefficient of friction at contacts.
+        max_iter: Maximum optimization iterations.
+    
+    Returns:
+        Optimized contact points and grasp quality score.
+    """
+    def grasp_quality(contacts_flat: np.ndarray) -> float:
+        """Negative quality to minimize (higher actual quality = lower value)."""
+        # Reshape flattened contacts back to 3D points
+        contacts = contacts_flat.reshape(-1, 3)
+        
+        # Calculate centroid of contacts
+        centroid = np.mean(contacts, axis=0)
+        
+        # Compute force closure (simplified)
+        normals = [np.random.normal(size=3) for _ in contacts]  # Placeholder for actual normal calculation
+        forces = [friction_coeff * (pt - centroid) for pt in contacts]
+        
+        # Simplified quality metric: sum of force magnitudes and diversity
+        quality = -sum(np.linalg.norm(f) for f in forces)  # Negative for minimization
+        return quality
+    
+    # Flatten initial contacts for optimization
+    initial_flat = np.array(initial_contacts).flatten()
+    
+    # Bounds: keep contacts within object mesh bounds
+    mesh_min = np.min(object_mesh, axis=0)
+    mesh_max = np.max(object_mesh, axis=0)
+    bounds = [(mesh_min[i%3], mesh_max[i%3]) for i in range(len(initial_flat))]
+    
+    # Optimize using SLSQP
+    result = minimize(
+        grasp_quality,
+        initial_flat,
+        method='SLSQP',
+        bounds=bounds,
+        options={'maxiter': max_iter}
+    )
+    
+    # Reshape optimized points and get final quality
+    optimized_contacts = result.x.reshape(-1, 3)
+    final_quality = -result.fun  # Convert back to positive quality
+    
+    return optimized_contacts.tolist(), final_quality
