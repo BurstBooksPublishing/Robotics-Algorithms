@@ -1,0 +1,44 @@
+/**
+ * Demonstrates holonomic vs. non-holonomic constraints in robotics motion planning.
+ * Context: Chapter 1 - Foundations of Robotics Algorithms, Section: Motion Planning Fundamentals.
+ */
+public class MotionConstraintsExample {
+
+    // Holonomic system: Robot can move in any direction without constraints
+    public static class HolonomicRobot {
+        private double x, y; // Position coordinates
+
+        public void move(double dx, double dy) {
+            x += dx; // Directly update x and y (no constraints)
+            y += dy;
+            System.out.printf("Holonomic move: (%.2f, %.2f)\n", x, y);
+        }
+    }
+
+    // Non-holonomic system: Robot has constrained motion (e.g., car-like)
+    public static class NonHolonomicRobot {
+        private double x, y, theta; // Position and orientation
+
+        public void move(double velocity, double steeringAngle, double dt) {
+            // Constrained by differential drive kinematics
+            double dx = velocity * Math.cos(theta) * dt;
+            double dy = velocity * Math.sin(theta) * dt;
+            double dtheta = (velocity * Math.tan(steeringAngle) / 2.0) * dt;
+
+            x += dx;
+            y += dy;
+            theta += dtheta;
+            System.out.printf("Non-holonomic move: (%.2f, %.2f, %.2f)\n", x, y, theta);
+        }
+    }
+
+    public static void main(String[] args) {
+        // Holonomic example (e.g., omnidirectional robot)
+        HolonomicRobot holonomicBot = new HolonomicRobot();
+        holonomicBot.move(1.0, 0.5); // Can move in x and y independently
+
+        // Non-holonomic example (e.g., car-like robot)
+        NonHolonomicRobot nonHolonomicBot = new NonHolonomicRobot();
+        nonHolonomicBot.move(1.0, Math.PI/6, 0.1); // Movement depends on orientation
+    }
+}
